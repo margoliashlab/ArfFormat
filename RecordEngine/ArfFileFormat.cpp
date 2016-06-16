@@ -680,7 +680,6 @@ void ArfRecordingData::getRowXPositions(Array<uint32>& rows)
 ArfFile::ArfFile(int processorNumber, String basename) : ArfFileBase()
 {
     initFile(processorNumber, basename);
-    //TODO IMPORTANT when is this called?
 }
 
 ArfFile::ArfFile() : ArfFileBase()
@@ -720,29 +719,18 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
     CHECK_ERROR(setAttribute(U32,&(info->bit_depth),recordPath,String("bit_depth")));
     //TODO what is bit_depth?
     CHECK_ERROR(createGroup(recordPath+"/application_data"));
-   // CHECK_ERROR(setAttributeArray(F32,info->bitVolts.getRawDataPointer(),info->bitVolts.size(),recordPath+"/application_data",String("channel_bit_volts")));
-//	bitVoltsSet = createDataSet(F32, info->bitVolts.size(), 0, recordPath + "/application_data/channel_bit_volts");
-//	if (bitVoltsSet.get())
-//		bitVoltsSet->writeDataBlock(info->bitVolts.size(), F32, info->bitVolts.getRawDataPointer());
-//	else
-//		std::cerr << "Error creating bitvolts data set" << std::endl;
-//TODO bit_volts dataset unnecessary, since we're saving that for each channel
-	
+
     CHECK_ERROR(setAttribute(U8,&mSample,recordPath,String("is_multiSampleRate_data")));
-    //CHECK_ERROR(setAttributeArray(F32,info->channelSampleRates.getRawDataPointer(),info->channelSampleRates.size(),recordPath+"/application_data",String("channel_sample_rates")));
-//	sampleRateSet = createDataSet(F32, info->channelSampleRates.size(), 0, recordPath + "/application_data/channel_sample_rates");
-//	if (sampleRateSet.get())
-//		sampleRateSet->writeDataBlock(info->channelSampleRates.size(), F32, info->channelSampleRates.getRawDataPointer());
-//	else
-//		std::cerr << "Error creating sample rates data set" << std::endl;
-//TODO same as with bit_volts
-        
+
+    
+    //TODO either array of 2 numbers seconds, microseconds, or a float
     int64 timestamp = Time::currentTimeMillis()/1000; //convert to seconds
-    int64 times[2] = {timestamp, 0}; //TODO should be other timestamp? but each processor separately anyway
-    CHECK_ERROR(setAttributeArray(I64,times,2,recordPath, String("timestamp")));
+//    int64 times[2] = {timestamp, 0}; //TODO should be other timestamp? but each processor separately anyway
+    CHECK_ERROR(setAttribute(I64,&timestamp, recordPath, String("timestamp")));
     
     String uuid = Uuid().toDashedString();
     CHECK_ERROR(setAttributeStr(uuid, recordPath, String("uuid")));
+    
 
 //    recdata = createDataSet(I16,0,nChannels,CHUNK_XSIZE,recordPath+"/data");
 //    if (!recdata.get())
@@ -757,11 +745,14 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
         recarr.add(createDataSet(I16, 0, CHUNK_XSIZE, channelPath));
         CHECK_ERROR(setAttribute(F32, info->channelSampleRates.getRawDataPointer()+i, channelPath, String("sampling_rate")));
         CHECK_ERROR(setAttribute(F32, info->bitVolts.getRawDataPointer()+i, channelPath, String("bit_volts")));
+        CHECK_ERROR(setAttributeStr(String("V"), channelPath, String("units")));
+        int64 datatype = 0;
+        CHECK_ERROR(setAttribute(I64,&datatype,channelPath, String("datatype")));
     }
-
-	tsData = createDataSet(I64, 0, nChannels, TIMESTAMP_CHUNK_SIZE, recordPath + "/timestamps");
-	if (!tsData.get())
-		std::cerr << "Error creating timestamps data set" << std::endl;
+//TODO get rid of timestamps
+//	tsData = createDataSet(I64, 0, nChannels, TIMESTAMP_CHUNK_SIZE, recordPath + "/timestamps");
+//	if (!tsData.get())
+//		std::cerr << "Error creating timestamps data set" << std::endl;
 
     curChan = nChannels;
 }
@@ -786,7 +777,8 @@ int ArfFile::createFileStructure()
     const uint16 ver = 2;
 //    if (createGroup("/recordings")) return -1;
 //TODO remove
-    if (setAttribute(U16,(void*)&ver,"/","arf_version")) return -1;
+    //TODO what version?
+//    if (setAttribute(U16,(void*)&ver,"/","arf_version")) return -1;
     return 0;
 }
 
@@ -797,11 +789,8 @@ void ArfFile::writeBlockData(int16* data, int nSamples)
 
 void ArfFile::writeChannel(int16* data, int nSamples, int noChannel)
 {
-//    int16 val[3] = {1,2,3};
-//    std::cout << "writing" << nSamples << "to channel" << curChan << std::endl;
     CHECK_ERROR(recarr[noChannel]->writeDataChannel(nSamples,I16,data));
     std::cout << getFileName() << std::endl;
-//    CHECK_ERROR(recarr[noChannel]->writeDataChannel(3,I16,val));
 }
 
 void ArfFile::writeRowData(int16* data, int nSamples)
