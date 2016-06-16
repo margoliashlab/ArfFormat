@@ -710,28 +710,31 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
 	ScopedPointer<ArfRecordingData> bitVoltsSet;
 	ScopedPointer<ArfRecordingData> sampleRateSet;
 
-    String recordPath = String("/recordings/")+String(recordingNumber);
+    String recordPath = String("/rec_")+String(recordingNumber);
     CHECK_ERROR(createGroup(recordPath));
     CHECK_ERROR(setAttributeStr(info->name,recordPath,String("name")));
-    CHECK_ERROR(setAttribute(U64,&(info->start_time),recordPath,String("start_time")));
-    CHECK_ERROR(setAttribute(U32,&(info->start_sample),recordPath,String("start_sample")));
-    CHECK_ERROR(setAttribute(F32,&(info->sample_rate),recordPath,String("sample_rate")));
+//    CHECK_ERROR(setAttribute(U64,&(info->start_time),recordPath,String("start_time")));
+//    CHECK_ERROR(setAttribute(U32,&(info->start_sample),recordPath,String("start_sample")));
+//    CHECK_ERROR(setAttribute(F32,&(info->sample_rate),recordPath,String("sample_rate")));
     CHECK_ERROR(setAttribute(U32,&(info->bit_depth),recordPath,String("bit_depth")));
+    //TODO what is bit_depth?
     CHECK_ERROR(createGroup(recordPath+"/application_data"));
    // CHECK_ERROR(setAttributeArray(F32,info->bitVolts.getRawDataPointer(),info->bitVolts.size(),recordPath+"/application_data",String("channel_bit_volts")));
-	bitVoltsSet = createDataSet(F32, info->bitVolts.size(), 0, recordPath + "/application_data/channel_bit_volts");
-	if (bitVoltsSet.get())
-		bitVoltsSet->writeDataBlock(info->bitVolts.size(), F32, info->bitVolts.getRawDataPointer());
-	else
-		std::cerr << "Error creating bitvolts data set" << std::endl;
+//	bitVoltsSet = createDataSet(F32, info->bitVolts.size(), 0, recordPath + "/application_data/channel_bit_volts");
+//	if (bitVoltsSet.get())
+//		bitVoltsSet->writeDataBlock(info->bitVolts.size(), F32, info->bitVolts.getRawDataPointer());
+//	else
+//		std::cerr << "Error creating bitvolts data set" << std::endl;
+//TODO bit_volts dataset unnecessary, since we're saving that for each channel
 	
-    CHECK_ERROR(setAttribute(U8,&mSample,recordPath+"/application_data",String("is_multiSampleRate_data")));
+    CHECK_ERROR(setAttribute(U8,&mSample,recordPath,String("is_multiSampleRate_data")));
     //CHECK_ERROR(setAttributeArray(F32,info->channelSampleRates.getRawDataPointer(),info->channelSampleRates.size(),recordPath+"/application_data",String("channel_sample_rates")));
-	sampleRateSet = createDataSet(F32, info->channelSampleRates.size(), 0, recordPath + "/application_data/channel_sample_rates");
-	if (sampleRateSet.get())
-		sampleRateSet->writeDataBlock(info->channelSampleRates.size(), F32, info->channelSampleRates.getRawDataPointer());
-	else
-		std::cerr << "Error creating sample rates data set" << std::endl;
+//	sampleRateSet = createDataSet(F32, info->channelSampleRates.size(), 0, recordPath + "/application_data/channel_sample_rates");
+//	if (sampleRateSet.get())
+//		sampleRateSet->writeDataBlock(info->channelSampleRates.size(), F32, info->channelSampleRates.getRawDataPointer());
+//	else
+//		std::cerr << "Error creating sample rates data set" << std::endl;
+//TODO same as with bit_volts
         
     int64 timestamp = Time::currentTimeMillis()/1000; //convert to seconds
     int64 times[2] = {timestamp, 0}; //TODO should be other timestamp? but each processor separately anyway
@@ -740,9 +743,10 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
     String uuid = Uuid().toDashedString();
     CHECK_ERROR(setAttributeStr(uuid, recordPath, String("uuid")));
 
-    recdata = createDataSet(I16,0,nChannels,CHUNK_XSIZE,recordPath+"/data");
-    if (!recdata.get())
-        std::cerr << "Error creating data set" << std::endl;
+//    recdata = createDataSet(I16,0,nChannels,CHUNK_XSIZE,recordPath+"/data");
+//    if (!recdata.get())
+//        std::cerr << "Error creating data set" << std::endl;
+//TODO remove this
         
     for (int i = 0; i<nChannels; i++) {        
         //separate DataSet for each channel
@@ -755,7 +759,7 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
         CHECK_ERROR(setAttribute(F32, info->bitVolts.getRawDataPointer()+i, channelPath, String("bit_volts")));
     }
 
-	tsData = createDataSet(I64, 0, nChannels, TIMESTAMP_CHUNK_SIZE, recordPath + "/application_data/timestamps");
+	tsData = createDataSet(I64, 0, nChannels, TIMESTAMP_CHUNK_SIZE, recordPath + "/timestamps");
 	if (!tsData.get())
 		std::cerr << "Error creating timestamps data set" << std::endl;
 
@@ -765,20 +769,23 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
 void ArfFile::stopRecording()
 {
     Array<uint32> samples;
-    String path = String("/recordings/")+String(recordingNumber)+String("/data");
-    recdata->getRowXPositions(samples);
+//    String path = String("/recordings/")+String(recordingNumber)+String("/data");
+//    recdata->getRowXPositions(samples);
 
-    CHECK_ERROR(setAttributeArray(U32,samples.getRawDataPointer(),samples.size(),path,"valid_samples"));
+//    CHECK_ERROR(setAttributeArray(U32,samples.getRawDataPointer(),samples.size(),path,"valid_samples"));
+//TODO remove this
     //ScopedPointer does the deletion and destructors the closings
     recdata = nullptr;
+    //TODO clear recarr?
 	tsData = nullptr;
 }
 
 int ArfFile::createFileStructure()
 {
     const uint16 ver = 2;
-    if (createGroup("/recordings")) return -1;
-    if (setAttribute(U16,(void*)&ver,"/","kwik_version")) return -1;
+//    if (createGroup("/recordings")) return -1;
+//TODO remove
+    if (setAttribute(U16,(void*)&ver,"/","arf_version")) return -1;
     return 0;
 }
 
