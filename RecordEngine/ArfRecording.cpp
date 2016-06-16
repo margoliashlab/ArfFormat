@@ -32,6 +32,8 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
+    savingPeriod = 0;
+    partNo = 0;
 }
 
 ArfRecording::~ArfRecording()
@@ -40,7 +42,7 @@ ArfRecording::~ArfRecording()
 
 String ArfRecording::getEngineID() const
 {
-    return "KWIK";
+    return "Arf";
 }
 
 // void HDF5Recording::updateTimeStamp(int64 timestamp)
@@ -90,7 +92,19 @@ void ArfRecording::addChannel(int index,const Channel* chan)
 
 void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordingNumber)
 {
-    String basepath = rootFolder.getFullPathName() + rootFolder.separatorString + "experiment" + String(experimentNumber);
+    openFiles(rootFolder, experimentNumber, recordingNumber, 0);
+}
+
+void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordingNumber, int partNo)
+{
+    this->rootFolder = rootFolder;
+    this->experimentNumber = experimentNumber;
+    this->recordingNumber = recordingNumber;
+    String partName = "";
+    if (savingPeriod != 0) {
+        partName = "_prt"+String(partNo);
+    }
+    String basepath = rootFolder.getFullPathName() + rootFolder.separatorString + "experiment" + String(experimentNumber) + partName;
     //KWE file
     eventFile->initFile(basepath);
     eventFile->open();
@@ -122,6 +136,7 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
 		if (!fileArray[index]->isOpen())
 		{
 			fileArray[index]->initFile(getChannel(getRealChannel(i))->nodeId, basepath);
+            std::cout << "Opening file part" << partNo << std::endl;
 			infoArray[index]->start_time = getTimestamp(i);
 		}
 
@@ -163,6 +178,7 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
     }
 
     hasAcquired = true;
+    lastSaveTime = Time::currentTimeMillis(); //TODO 
 }
 
 void ArfRecording::closeFiles()
@@ -193,7 +209,7 @@ void ArfRecording::closeFiles()
 
 void ArfRecording::writeData(int writeChannel, int realChannel, const float* buffer, int size)
 {
-	if (size > bufferSize) //Shouldn't happen, and if it happens it'll be slow, but better this than crashing. Will be reset on flie close and reset.
+    if (size > bufferSize) //Shouldn't happen, and if it happens it'll be slow, but better this than crashing. Will be reset on flie close and reset.
 	{
 		std::cerr << "Write buffer overrun, resizing to" << size << std::endl;
 		bufferSize = size;
@@ -208,41 +224,52 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
     //TODO remove this line
     fileArray[index]->writeChannel(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
 
-	int sampleOffset = channelLeftOverSamples[writeChannel];
-	int blockStart = sampleOffset;
-	int64 currentTS = getTimestamp(writeChannel);
-
-	if (sampleOffset > 0)
-	{
-		currentTS += TIMESTAMP_EACH_NSAMPLES - sampleOffset;
-		blockStart += TIMESTAMP_EACH_NSAMPLES - sampleOffset;
-	}
-	
-	for (int i = 0; i < size; i += TIMESTAMP_EACH_NSAMPLES)
-	{
-		if ((blockStart + i) < (sampleOffset + size))
-		{
-			channelTimestampArray[writeChannel]->add(currentTS);
-			currentTS += TIMESTAMP_EACH_NSAMPLES;
-		}
-	}
-	channelLeftOverSamples.set(writeChannel, (size + sampleOffset) % TIMESTAMP_EACH_NSAMPLES);
+//	int sampleOffset = channelLeftOverSamples[writeChannel];
+//	int blockStart = sampleOffset;
+//	int64 currentTS = getTimestamp(writeChannel);
+//
+//	if (sampleOffset > 0)
+//	{
+//		currentTS += TIMESTAMP_EACH_NSAMPLES - sampleOffset;
+//		blockStart += TIMESTAMP_EACH_NSAMPLES - sampleOffset;
+//	}
+//	
+//	for (int i = 0; i < size; i += TIMESTAMP_EACH_NSAMPLES)
+//	{
+//		if ((blockStart + i) < (sampleOffset + size))
+//		{
+//			channelTimestampArray[writeChannel]->add(currentTS);
+//			currentTS += TIMESTAMP_EACH_NSAMPLES;
+//		}
+//	}
+//	channelLeftOverSamples.set(writeChannel, (size + sampleOffset) % TIMESTAMP_EACH_NSAMPLES);
+    if (savingPeriod != 0) {
+        int64 curTime = Time::currentTimeMillis();
+        if (curTime - lastSaveTime > savingPeriod)
+        {
+            partNo++;
+            this->closeFiles();
+            this->openFiles(rootFolder,experimentNumber,recordingNumber, partNo);
+            lastSaveTime = Time::currentTimeMillis();        
+        }        
+    }
+    
 }
 
 void ArfRecording::endChannelBlock(bool lastBlock)
 {
-	int nCh = channelTimestampArray.size();
-	for (int ch = 0; ch < nCh; ++ch)
-	{
-		int tsSize = channelTimestampArray[ch]->size();
-		if ((tsSize > 0) && ((tsSize > CHANNEL_TIMESTAMP_MIN_WRITE) || lastBlock))
-		{
-			int realChan = getRealChannel(ch);
-			int index = processorMap[getChannel(realChan)->recordIndex];
-			fileArray[index]->writeTimestamps(channelTimestampArray[ch]->getRawDataPointer(), tsSize, recordedChanToKWDChan[ch]);
-			channelTimestampArray[ch]->clearQuick();
-		}
-	}
+//	int nCh = channelTimestampArray.size();
+//	for (int ch = 0; ch < nCh; ++ch)
+//	{
+//		int tsSize = channelTimestampArray[ch]->size();
+//		if ((tsSize > 0) && ((tsSize > CHANNEL_TIMESTAMP_MIN_WRITE) || lastBlock))
+//		{
+//			int realChan = getRealChannel(ch);
+//			int index = processorMap[getChannel(realChan)->recordIndex];
+//			fileArray[index]->writeTimestamps(channelTimestampArray[ch]->getRawDataPointer(), tsSize, recordedChanToKWDChan[ch]);
+//			channelTimestampArray[ch]->clearQuick();
+//		}
+//	}
 }
 
 void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 timestamp)
@@ -273,6 +300,6 @@ void ArfRecording::startAcquisition()
 
 RecordEngineManager* ArfRecording::getEngineManager()
 {
-    RecordEngineManager* man = new RecordEngineManager("KWIK","Kwik",&(engineFactory<ArfRecording>));
+    RecordEngineManager* man = new RecordEngineManager("Arf","Arf",&(engineFactory<ArfRecording>));
     return man;
 }

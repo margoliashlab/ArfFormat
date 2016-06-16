@@ -680,6 +680,7 @@ void ArfRecordingData::getRowXPositions(Array<uint32>& rows)
 ArfFile::ArfFile(int processorNumber, String basename) : ArfFileBase()
 {
     initFile(processorNumber, basename);
+    //TODO IMPORTANT when is this called?
 }
 
 ArfFile::ArfFile() : ArfFileBase()
@@ -754,7 +755,6 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
         String channelPath = recordPath+"/channel"+String(i);
         //TODO attributes for datasets
         recarr.add(createDataSet(I16, 0, CHUNK_XSIZE, channelPath));
-        std::cout << "saving sampling rate" << std::endl;
         CHECK_ERROR(setAttribute(F32, info->channelSampleRates.getRawDataPointer()+i, channelPath, String("sampling_rate")));
         CHECK_ERROR(setAttribute(F32, info->bitVolts.getRawDataPointer()+i, channelPath, String("bit_volts")));
     }
@@ -777,6 +777,7 @@ void ArfFile::stopRecording()
     //ScopedPointer does the deletion and destructors the closings
     recdata = nullptr;
     //TODO clear recarr?
+    recarr.clear();
 	tsData = nullptr;
 }
 
@@ -799,6 +800,7 @@ void ArfFile::writeChannel(int16* data, int nSamples, int noChannel)
 //    int16 val[3] = {1,2,3};
 //    std::cout << "writing" << nSamples << "to channel" << curChan << std::endl;
     CHECK_ERROR(recarr[noChannel]->writeDataChannel(nSamples,I16,data));
+    std::cout << getFileName() << std::endl;
 //    CHECK_ERROR(recarr[noChannel]->writeDataChannel(3,I16,val));
 }
 
