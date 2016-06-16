@@ -34,7 +34,7 @@ class H5File;
 class DataType;
 }
 
-struct HDF5RecordingInfo
+struct ArfRecordingInfo
 {
     String name;
     int64 start_time;
@@ -46,11 +46,11 @@ struct HDF5RecordingInfo
     bool multiSample;
 };
 
-class HDF5FileBase
+class ArfFileBase
 {
 public:
-    HDF5FileBase();
-    virtual ~HDF5FileBase();
+    ArfFileBase();
+    virtual ~ArfFileBase();
 
     int open();
 	int open(int nChans);
@@ -89,7 +89,7 @@ private:
     ScopedPointer<H5::H5File> file;
     bool opened;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HDF5FileBase);
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArfFileBase);
 };
 
 class ArfRecordingData
@@ -98,10 +98,12 @@ public:
     ArfRecordingData(H5::DataSet* data);
     ~ArfRecordingData();
 
-    int writeDataBlock(int xDataSize, HDF5FileBase::DataTypes type, void* data);
-    int writeDataBlock(int xDataSize, int yDataSize, HDF5FileBase::DataTypes type, void* data);
+    int writeDataBlock(int xDataSize, ArfFileBase::DataTypes type, void* data);
+    int writeDataBlock(int xDataSize, int yDataSize, ArfFileBase::DataTypes type, void* data);
 
-    int writeDataRow(int yPos, int xDataSize, HDF5FileBase::DataTypes type, void* data);
+    int writeDataRow(int yPos, int xDataSize, ArfFileBase::DataTypes type, void* data);
+    
+    int writeDataChannel(int dataSize, ArfFileBase::DataTypes type, void* data);
 
     void getRowXPositions(Array<uint32>& rows);
 
@@ -116,18 +118,19 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArfRecordingData);
 };
 
-class ArfFile : public HDF5FileBase
+class ArfFile : public ArfFileBase
 {
 public:
     ArfFile(int processorNumber, String basename);
     ArfFile();
     virtual ~ArfFile();
     void initFile(int processorNumber, String basename);
-    void startNewRecording(int recordingNumber, int nChannels, HDF5RecordingInfo* info);
+    void startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info);
     void stopRecording();
     void writeBlockData(int16* data, int nSamples);
     void writeRowData(int16* data, int nSamples);
 	void writeRowData(int16* data, int nSamples, int channel);
+    void writeChannel(int16* data, int nSamples, int noChannel);
 	void writeTimestamps(int64* ts, int nTs, int channel);
     String getFileName();
 
@@ -142,18 +145,22 @@ private:
     bool multiSample;
     ScopedPointer<ArfRecordingData> recdata;
 	ScopedPointer<ArfRecordingData> tsData;
+    
+    OwnedArray<ArfRecordingData> recarr;
+    
+    
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArfFile);
 };
 
-class KWEFile : public HDF5FileBase
+class AEFile : public ArfFileBase
 {
 public:
-    KWEFile(String basename);
-    KWEFile();
-    virtual ~KWEFile();
+    AEFile(String basename);
+    AEFile();
+    virtual ~AEFile();
     void initFile(String basename);
-    void startNewRecording(int recordingNumber, HDF5RecordingInfo* info);
+    void startNewRecording(int recordingNumber, ArfRecordingInfo* info);
     void stopRecording();
     void writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp);
   //  void addKwdFile(String filename);
@@ -176,15 +183,15 @@ private:
     Array<String> eventDataNames;
     int kwdIndex;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(KWEFile);
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AEFile);
 };
 
-class KWXFile : public HDF5FileBase
+class AXFile : public ArfFileBase
 {
 public:
-    KWXFile(String basename);
-    KWXFile();
-    virtual ~KWXFile();
+    AXFile(String basename);
+    AXFile();
+    virtual ~AXFile();
     void initFile(String basename);
     void startNewRecording(int recordingNumber);
     void stopRecording();
@@ -208,7 +215,8 @@ private:
 	HeapBlock<int16> transformVector;
     //int16* transformVector;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(KWXFile);
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AXFile);
 };
 
 #endif  // ARFFILEFORMAT_H_INCLUDED
+

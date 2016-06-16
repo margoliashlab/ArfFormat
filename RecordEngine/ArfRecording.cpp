@@ -40,7 +40,7 @@ ArfRecording::~ArfRecording()
 
 String ArfRecording::getEngineID() const
 {
-    return "Arf";
+    return "KWIK";
 }
 
 // void HDF5Recording::updateTimeStamp(int64 timestamp)
@@ -50,7 +50,7 @@ String ArfRecording::getEngineID() const
 
 void ArfRecording::registerProcessor(const GenericProcessor* proc)
 {
-    HDF5RecordingInfo* info = new HDF5RecordingInfo();
+    ArfRecordingInfo* info = new ArfRecordingInfo();
 	//This is a VERY BAD thig to do. temporary only until we fix const-correctness on GenericEditor methods
 	//(which implies modifying all the plugins and processors)
     info->sample_rate = const_cast<GenericProcessor*>(proc)->getSampleRate();
@@ -204,7 +204,9 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
 	int index = processorMap[getChannel(realChannel)->recordIndex];
 	FloatVectorOperations::copyWithMultiply(scaledBuffer.getData(), buffer, multFactor, size);
 	AudioDataConverters::convertFloatToInt16LE(scaledBuffer.getData(), intBuffer.getData(), size);
-	fileArray[index]->writeRowData(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
+//	fileArray[index]->writeRowData(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
+    //TODO remove this line
+    fileArray[index]->writeChannel(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
 
 	int sampleOffset = channelLeftOverSamples[writeChannel];
 	int blockStart = sampleOffset;
@@ -263,14 +265,14 @@ void ArfRecording::writeSpike(int electrodeIndex, const SpikeObject& spike, int6
 
 void ArfRecording::startAcquisition()
 {
-    eventFile = new KWEFile();
-    eventFile->addEventType("TTL",HDF5FileBase::U8,"event_channels");
-    eventFile->addEventType("Messages",HDF5FileBase::STR,"Text");
-    spikesFile = new KWXFile();
+    eventFile = new AEFile();
+    eventFile->addEventType("TTL",ArfFileBase::U8,"event_channels");
+    eventFile->addEventType("Messages",ArfFileBase::STR,"Text");
+    spikesFile = new AXFile();
 }
 
 RecordEngineManager* ArfRecording::getEngineManager()
 {
-    RecordEngineManager* man = new RecordEngineManager("Arf","Arf",&(engineFactory<ArfRecording>));
+    RecordEngineManager* man = new RecordEngineManager("KWIK","Kwik",&(engineFactory<ArfRecording>));
     return man;
 }

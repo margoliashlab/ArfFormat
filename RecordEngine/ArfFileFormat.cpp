@@ -55,32 +55,32 @@ using namespace H5;
 
 //HDF5FileBase
 
-HDF5FileBase::HDF5FileBase() : readyToOpen(false), opened(false)
+ArfFileBase::ArfFileBase() : readyToOpen(false), opened(false)
 {
     Exception::dontPrint();
 };
 
-HDF5FileBase::~HDF5FileBase()
+ArfFileBase::~ArfFileBase()
 {
     close();
 }
 
-bool HDF5FileBase::isOpen() const
+bool ArfFileBase::isOpen() const
 {
     return opened;
 }
 
-bool HDF5FileBase::isReadyToOpen() const
+bool ArfFileBase::isReadyToOpen() const
 {
 	return readyToOpen;
 }
 
-int HDF5FileBase::open()
+int ArfFileBase::open()
 {
 	return open(-1);
 }
 
-int HDF5FileBase::open(int nChans)
+int ArfFileBase::open(int nChans)
 {
     if (!readyToOpen) return -1;
     if (File(getFileName()).existsAsFile())
@@ -90,7 +90,7 @@ int HDF5FileBase::open(int nChans)
 
 }
 
-int HDF5FileBase::open(bool newfile, int nChans)
+int ArfFileBase::open(bool newfile, int nChans)
 {
     int accFlags,ret=0;
 
@@ -130,19 +130,19 @@ int HDF5FileBase::open(bool newfile, int nChans)
     }
 }
 
-void HDF5FileBase::close()
+void ArfFileBase::close()
 {
     file = nullptr;
     opened = false;
 }
 
-int HDF5FileBase::setAttribute(DataTypes type, void* data, String path, String name)
+int ArfFileBase::setAttribute(DataTypes type, void* data, String path, String name)
 {
     return setAttributeArray(type, data, 1, path, name);
 }
 
 
-int HDF5FileBase::setAttributeArray(DataTypes type, void* data, int size, String path, String name)
+int ArfFileBase::setAttributeArray(DataTypes type, void* data, int size, String path, String name)
 {
     H5Location* loc;
     Group gloc;
@@ -208,7 +208,7 @@ int HDF5FileBase::setAttributeArray(DataTypes type, void* data, int size, String
     return 0;
 }
 
-int HDF5FileBase::setAttributeStr(String value, String path, String name)
+int ArfFileBase::setAttributeStr(String value, String path, String name)
 {
     H5Location* loc;
     Group gloc;
@@ -265,7 +265,7 @@ int HDF5FileBase::setAttributeStr(String value, String path, String name)
     return 0;
 }
 
-int HDF5FileBase::createGroup(String path)
+int ArfFileBase::createGroup(String path)
 {
     if (!opened) return -1;
     try
@@ -283,7 +283,7 @@ int HDF5FileBase::createGroup(String path)
     return 0;
 }
 
-ArfRecordingData* HDF5FileBase::getDataSet(String path)
+ArfRecordingData* ArfFileBase::getDataSet(String path)
 {
     ScopedPointer<DataSet> data;
 
@@ -311,13 +311,13 @@ ArfRecordingData* HDF5FileBase::getDataSet(String path)
     }
 }
 
-ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int sizeX, int chunkX, String path)
+ArfRecordingData* ArfFileBase::createDataSet(DataTypes type, int sizeX, int chunkX, String path)
 {
     int chunks[3] = {chunkX, 0, 0};
     return createDataSet(type,1,&sizeX,chunks,path);
 }
 
-ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int sizeX, int sizeY, int chunkX, String path)
+ArfRecordingData* ArfFileBase::createDataSet(DataTypes type, int sizeX, int sizeY, int chunkX, String path)
 {
     int size[2];
     int chunks[3] = {chunkX, 0, 0};
@@ -326,7 +326,7 @@ ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int sizeX, int siz
     return createDataSet(type,2,size,chunks,path);
 }
 
-ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int sizeX, int sizeY, int sizeZ, int chunkX, String path)
+ArfRecordingData* ArfFileBase::createDataSet(DataTypes type, int sizeX, int sizeY, int sizeZ, int chunkX, String path)
 {
     int size[3];
     int chunks[3] = {chunkX, 0, 0};
@@ -336,7 +336,7 @@ ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int sizeX, int siz
     return createDataSet(type,2,size,chunks,path);
 }
 
-ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int sizeX, int sizeY, int sizeZ, int chunkX, int chunkY, String path)
+ArfRecordingData* ArfFileBase::createDataSet(DataTypes type, int sizeX, int sizeY, int sizeZ, int chunkX, int chunkY, String path)
 {
     int size[3];
     int chunks[3] = {chunkX, chunkY, 0};
@@ -346,7 +346,7 @@ ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int sizeX, int siz
     return createDataSet(type,3,size,chunks,path);
 }
 
-ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int dimension, int* size, int* chunking, String path)
+ArfRecordingData* ArfFileBase::createDataSet(DataTypes type, int dimension, int* size, int* chunking, String path)
 {
     ScopedPointer<DataSet> data;
     DSetCreatPropList prop;
@@ -402,7 +402,7 @@ ArfRecordingData* HDF5FileBase::createDataSet(DataTypes type, int dimension, int
 
 }
 
-H5::DataType HDF5FileBase::getNativeType(DataTypes type)
+H5::DataType ArfFileBase::getNativeType(DataTypes type)
 {
     switch (type)
     {
@@ -440,7 +440,7 @@ H5::DataType HDF5FileBase::getNativeType(DataTypes type)
     return PredType::NATIVE_INT32;
 }
 
-H5::DataType HDF5FileBase::getH5Type(DataTypes type)
+H5::DataType ArfFileBase::getH5Type(DataTypes type)
 {
     switch (type)
     {
@@ -513,12 +513,12 @@ ArfRecordingData::~ArfRecordingData()
 	//Safety
 	dSet->flush(H5F_SCOPE_GLOBAL);
 }
-int ArfRecordingData::writeDataBlock(int xDataSize, HDF5FileBase::DataTypes type, void* data)
+int ArfRecordingData::writeDataBlock(int xDataSize, ArfFileBase::DataTypes type, void* data)
 {
     return writeDataBlock(xDataSize,size[1],type,data);
 }
 
-int ArfRecordingData::writeDataBlock(int xDataSize, int yDataSize, HDF5FileBase::DataTypes type, void* data)
+int ArfRecordingData::writeDataBlock(int xDataSize, int yDataSize, ArfFileBase::DataTypes type, void* data)
 {
     hsize_t dim[3],offset[3];
     DataSpace fSpace;
@@ -555,7 +555,7 @@ int ArfRecordingData::writeDataBlock(int xDataSize, int yDataSize, HDF5FileBase:
 
         fSpace.selectHyperslab(H5S_SELECT_SET, dim, offset);
 
-        nativeType = HDF5FileBase::getNativeType(type);
+        nativeType = ArfFileBase::getNativeType(type);
 
         dSet->write(data,nativeType,mSpace,fSpace);
         xPos += xDataSize;
@@ -571,8 +571,48 @@ int ArfRecordingData::writeDataBlock(int xDataSize, int yDataSize, HDF5FileBase:
     return 0;
 }
 
+int ArfRecordingData::writeDataChannel(int dataSize, ArfFileBase::DataTypes type, void* data)
+{
+    //Data is 1-dimensional
+    hsize_t dim[3],offset[3];
+    DataSpace fSpace;
+    
+    DataType nativeType = ArfFileBase::getNativeType(type);
+    if (xPos+dataSize > size[0])
+    {
+        dim[0] = xPos + dataSize;
+        dim[1] = 0;
+        dim[2] = 0;
+        dSet->extend(dim);
+    }
+    
+    fSpace = dSet->getSpace();
+    fSpace.getSimpleExtentDims(dim);
+    size[0]=dim[0];
+    if (dimension > 1)
+        size[1]=dim[1];
 
-int ArfRecordingData::writeDataRow(int yPos, int xDataSize, HDF5FileBase::DataTypes type, void* data)
+    //Create memory space
+    dim[0]= dataSize;
+    dim[1]= 0;
+    dim[1]= 0;
+    dim[2]= 0;
+
+    DataSpace mSpace(dimension,dim);
+    //select where to write
+    offset[0]=xPos;
+    offset[1]=0;
+    offset[2]=0;
+
+    fSpace.selectHyperslab(H5S_SELECT_SET, dim, offset);
+    
+    
+    dSet->write(data,nativeType,mSpace,fSpace);
+    xPos = xPos + dataSize;
+}
+
+
+int ArfRecordingData::writeDataRow(int yPos, int xDataSize, ArfFileBase::DataTypes type, void* data)
 {
     hsize_t dim[2],offset[2];
     DataSpace fSpace;
@@ -607,7 +647,7 @@ int ArfRecordingData::writeDataRow(int yPos, int xDataSize, HDF5FileBase::DataTy
         offset[1] = yPos;
         fSpace.selectHyperslab(H5S_SELECT_SET, dim, offset);
 
-        nativeType = HDF5FileBase::getNativeType(type);
+        nativeType = ArfFileBase::getNativeType(type);
 
 
         dSet->write(data,nativeType,mSpace,fSpace);
@@ -637,12 +677,12 @@ void ArfRecordingData::getRowXPositions(Array<uint32>& rows)
 
 //KWD File
 
-ArfFile::ArfFile(int processorNumber, String basename) : HDF5FileBase()
+ArfFile::ArfFile(int processorNumber, String basename) : ArfFileBase()
 {
     initFile(processorNumber, basename);
 }
 
-ArfFile::ArfFile() : HDF5FileBase()
+ArfFile::ArfFile() : ArfFileBase()
 {
 }
 
@@ -660,7 +700,7 @@ void ArfFile::initFile(int processorNumber, String basename)
     readyToOpen=true;
 }
 
-void ArfFile::startNewRecording(int recordingNumber, int nChannels, HDF5RecordingInfo* info)
+void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info)
 {
     this->recordingNumber = recordingNumber;
     this->nChannels = nChannels;
@@ -692,10 +732,28 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, HDF5Recordin
 		sampleRateSet->writeDataBlock(info->channelSampleRates.size(), F32, info->channelSampleRates.getRawDataPointer());
 	else
 		std::cerr << "Error creating sample rates data set" << std::endl;
+        
+    int64 timestamp = Time::currentTimeMillis()/1000; //convert to seconds
+    int64 times[2] = {timestamp, 0}; //TODO should be other timestamp? but each processor separately anyway
+    CHECK_ERROR(setAttributeArray(I64,times,2,recordPath, String("timestamp")));
+    
+    String uuid = Uuid().toDashedString();
+    CHECK_ERROR(setAttributeStr(uuid, recordPath, String("uuid")));
 
     recdata = createDataSet(I16,0,nChannels,CHUNK_XSIZE,recordPath+"/data");
     if (!recdata.get())
         std::cerr << "Error creating data set" << std::endl;
+        
+    for (int i = 0; i<nChannels; i++) {        
+        //separate DataSet for each channel
+        //TODO error checking, memleaks?
+        String channelPath = recordPath+"/channel"+String(i);
+        //TODO attributes for datasets
+        recarr.add(createDataSet(I16, 0, CHUNK_XSIZE, channelPath));
+        std::cout << "saving sampling rate" << std::endl;
+        CHECK_ERROR(setAttribute(F32, info->channelSampleRates.getRawDataPointer()+i, channelPath, String("sampling_rate")));
+        CHECK_ERROR(setAttribute(F32, info->bitVolts.getRawDataPointer()+i, channelPath, String("bit_volts")));
+    }
 
 	tsData = createDataSet(I64, 0, nChannels, TIMESTAMP_CHUNK_SIZE, recordPath + "/application_data/timestamps");
 	if (!tsData.get())
@@ -720,13 +778,21 @@ int ArfFile::createFileStructure()
 {
     const uint16 ver = 2;
     if (createGroup("/recordings")) return -1;
-    if (setAttribute(U16,(void*)&ver,"/","arf_version")) return -1;
+    if (setAttribute(U16,(void*)&ver,"/","kwik_version")) return -1;
     return 0;
 }
 
 void ArfFile::writeBlockData(int16* data, int nSamples)
 {
     CHECK_ERROR(recdata->writeDataBlock(nSamples,I16,data));
+}
+
+void ArfFile::writeChannel(int16* data, int nSamples, int noChannel)
+{
+//    int16 val[3] = {1,2,3};
+//    std::cout << "writing" << nSamples << "to channel" << curChan << std::endl;
+    CHECK_ERROR(recarr[noChannel]->writeDataChannel(nSamples,I16,data));
+//    CHECK_ERROR(recarr[noChannel]->writeDataChannel(3,I16,val));
 }
 
 void ArfFile::writeRowData(int16* data, int nSamples)
@@ -758,31 +824,31 @@ void ArfFile::writeTimestamps(int64* ts, int nTs, int channel)
 
 //KWE File
 
-KWEFile::KWEFile(String basename) : HDF5FileBase()
+AEFile::AEFile(String basename) : ArfFileBase()
 {
     initFile(basename);
 }
 
-KWEFile::KWEFile() : HDF5FileBase()
+AEFile::AEFile() : ArfFileBase()
 {
 
 }
 
-KWEFile::~KWEFile() {}
+AEFile::~AEFile() {}
 
-String KWEFile::getFileName()
+String AEFile::getFileName()
 {
     return filename;
 }
 
-void KWEFile::initFile(String basename)
+void AEFile::initFile(String basename)
 {
     if (isOpen()) return;
     filename = basename + ".kwe";
     readyToOpen=true;
 }
 
-int KWEFile::createFileStructure()
+int AEFile::createFileStructure()
 {
     const uint16 ver = 2;
     if (createGroup("/recordings")) return -1;
@@ -807,11 +873,11 @@ int KWEFile::createFileStructure()
         dSet = createDataSet(eventTypes[i],0,EVENT_CHUNK_SIZE,path + "/" + eventDataNames[i]);
         if (!dSet) return -1;
     }
-    if (setAttribute(U16,(void*)&ver,"/","arf_version")) return -1;
+    if (setAttribute(U16,(void*)&ver,"/","kwik_version")) return -1;
     return 0;
 }
 
-void KWEFile::startNewRecording(int recordingNumber, HDF5RecordingInfo* info)
+void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
 {
     this->recordingNumber = recordingNumber;
     kwdIndex=0;
@@ -852,7 +918,7 @@ void KWEFile::startNewRecording(int recordingNumber, HDF5RecordingInfo* info)
     }
 }
 
-void KWEFile::stopRecording()
+void AEFile::stopRecording()
 {
     timeStamps.clear();
     recordings.clear();
@@ -861,7 +927,7 @@ void KWEFile::stopRecording()
     eventData.clear();
 }
 
-void KWEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp)
+void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp)
 {
     if (type > eventNames.size() || type < 0)
     {
@@ -887,7 +953,7 @@ void KWEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64
     kwdIndex++;
 }*/
 
-void KWEFile::addEventType(String name, DataTypes type, String dataName)
+void AEFile::addEventType(String name, DataTypes type, String dataName)
 {
     eventNames.add(name);
     eventTypes.add(type);
@@ -896,36 +962,36 @@ void KWEFile::addEventType(String name, DataTypes type, String dataName)
 
 //KWX File
 
-KWXFile::KWXFile(String basename) : HDF5FileBase()
+AXFile::AXFile(String basename) : ArfFileBase()
 {
     initFile(basename);
     numElectrodes=0;
     transformVector.malloc(MAX_TRANSFORM_SIZE);
 }
 
-KWXFile::KWXFile() : HDF5FileBase()
+AXFile::AXFile() : ArfFileBase()
 {
     numElectrodes=0;
     transformVector.malloc(MAX_TRANSFORM_SIZE);
 }
 
-KWXFile::~KWXFile()
+AXFile::~AXFile()
 {
 }
 
-String KWXFile::getFileName()
+String AXFile::getFileName()
 {
     return filename;
 }
 
-void KWXFile::initFile(String basename)
+void AXFile::initFile(String basename)
 {
     if (isOpen()) return;
     filename = basename + ".kwx";
     readyToOpen=true;
 }
 
-int KWXFile::createFileStructure()
+int AXFile::createFileStructure()
 {
     const uint16 ver = 2;
     if (createGroup("/channel_groups")) return -1;
@@ -938,13 +1004,13 @@ int KWXFile::createFileStructure()
     return 0;
 }
 
-void KWXFile::addChannelGroup(int nChannels)
+void AXFile::addChannelGroup(int nChannels)
 {
     channelArray.add(nChannels);
     numElectrodes++;
 }
 
-int KWXFile::createChannelGroup(int index)
+int AXFile::createChannelGroup(int index)
 {
     ScopedPointer<ArfRecordingData> dSet;
     int nChannels = channelArray[index];
@@ -959,7 +1025,7 @@ int KWXFile::createChannelGroup(int index)
     return 0;
 }
 
-void KWXFile::startNewRecording(int recordingNumber)
+void AXFile::startNewRecording(int recordingNumber)
 {
     ArfRecordingData* dSet;
     String path;
@@ -983,20 +1049,20 @@ void KWXFile::startNewRecording(int recordingNumber)
     }
 }
 
-void KWXFile::stopRecording()
+void AXFile::stopRecording()
 {
     spikeArray.clear();
     timeStamps.clear();
     recordingArray.clear();
 }
 
-void KWXFile::resetChannels()
+void AXFile::resetChannels()
 {
     stopRecording(); //Just in case
     channelArray.clear();
 }
 
-void KWXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, uint64 timestamp)
+void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, uint64 timestamp)
 {
     if ((groupIndex < 0) || (groupIndex >= numElectrodes))
     {

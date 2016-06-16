@@ -58,9 +58,9 @@ private:
 	OwnedArray<Array<int64>> channelTimestampArray;
 	Array<int> channelLeftOverSamples;
     OwnedArray<ArfFile> fileArray;
-    OwnedArray<HDF5RecordingInfo> infoArray;
-    ScopedPointer<KWEFile> eventFile;
-    ScopedPointer<KWXFile> spikesFile;
+    OwnedArray<ArfRecordingInfo> infoArray;
+    ScopedPointer<AEFile> eventFile;
+    ScopedPointer<AXFile> spikesFile;
 	HeapBlock<float> scaledBuffer;
 	HeapBlock<int16> intBuffer;
 	int bufferSize;
