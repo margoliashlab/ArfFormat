@@ -33,7 +33,6 @@ public:
     ArfRecording();
     ~ArfRecording();
     String getEngineID() const override;
-    void openFiles(File rootFolder, int experimentNumber, int recordingNumber, int partNo);
     void openFiles(File rootFolder, int experimentNumber, int recordingNumber) override;
 	void closeFiles() override;
 	void writeData(int writeChannel, int realChannel, const float* buffer, int size) override;
@@ -68,8 +67,9 @@ private:
     //float* scaledBuffer;
     //int16* intBuffer;
     
-    int64 savingPeriod;
-    int64 lastSaveTime;
+
+    int savingNum;
+    OwnedArray<Array<int16>> partBuffer;
     int partNo;
     File rootFolder;
     int experimentNumber;

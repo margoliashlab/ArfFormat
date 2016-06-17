@@ -32,7 +32,7 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
-    savingPeriod = 0;
+    savingNum = 100000;
     partNo = 0;
 }
 
@@ -45,10 +45,6 @@ String ArfRecording::getEngineID() const
     return "Arf";
 }
 
-// void HDF5Recording::updateTimeStamp(int64 timestamp)
-// {
-//     this->timestamp = timestamp;
-// }
 
 void ArfRecording::registerProcessor(const GenericProcessor* proc)
 {
@@ -90,19 +86,16 @@ void ArfRecording::addChannel(int index,const Channel* chan)
     processorMap.add(processorIndex);
 }
 
-void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordingNumber)
-{
-    openFiles(rootFolder, experimentNumber, recordingNumber, 0);
-}
 
-void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordingNumber, int partNo)
+void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordingNumber)
 {
     this->rootFolder = rootFolder;
     this->experimentNumber = experimentNumber;
     this->recordingNumber = recordingNumber;
     String partName = "";
-    if (savingPeriod != 0) {
+    if (savingNum != 0) {
         partName = "_prt"+String(partNo);
+        std::cout << "Opening part" << partNo << std::endl;
     }
     String basepath = rootFolder.getFullPathName() + rootFolder.separatorString + "experiment" + String(experimentNumber) + partName;
     //KWE file
@@ -133,10 +126,11 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
 	for (int i = 0; i < getNumRecordedChannels(); i++)
 	{
 		int index = processorMap[getRealChannel(i)];
-		if (!fileArray[index]->isOpen())
+		ArfFile* newFile = new ArfFile;
+        fileArray.set(index, newFile);
+        if (!fileArray[index]->isOpen())
 		{
 			fileArray[index]->initFile(getChannel(getRealChannel(i))->nodeId, basepath);
-            std::cout << "Opening file part" << partNo << std::endl;
 			infoArray[index]->start_time = getTimestamp(i);
 		}
 
@@ -176,9 +170,13 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
             fileArray[i]->startNewRecording(recordingNumber,bitVoltsArray[i]->size(),infoArray[i]);
         }
     }
+    
+    for (int i=0; i<getNumRecordedChannels(); i++)
+    {        
+        partBuffer.add(new Array<int16>);
+    }
 
     hasAcquired = true;
-    lastSaveTime = Time::currentTimeMillis(); //TODO 
 }
 
 void ArfRecording::closeFiles()
@@ -208,7 +206,7 @@ void ArfRecording::closeFiles()
 }
 
 void ArfRecording::writeData(int writeChannel, int realChannel, const float* buffer, int size)
-{
+{        
     if (size > bufferSize) //Shouldn't happen, and if it happens it'll be slow, but better this than crashing. Will be reset on flie close and reset.
 	{
 		std::cerr << "Write buffer overrun, resizing to" << size << std::endl;
@@ -220,9 +218,43 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
 	int index = processorMap[getChannel(realChannel)->recordIndex];
 	FloatVectorOperations::copyWithMultiply(scaledBuffer.getData(), buffer, multFactor, size);
 	AudioDataConverters::convertFloatToInt16LE(scaledBuffer.getData(), intBuffer.getData(), size);
-//	fileArray[index]->writeRowData(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
-    //TODO remove this line
-    fileArray[index]->writeChannel(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
+    
+    if (savingNum != 0) { //saving in parts; based on intermediate buffer
+        int16* buf = intBuffer.getData();
+        //simply appending to Array - best option?
+        for (int i=0; i<size; i++) {
+            partBuffer[writeChannel]->add(*(buf+i));
+        }
+
+        partBuffer.getLock().enter();
+        bool ifSave = true;
+        for (int i=0; i<getNumRecordedChannels();i++)
+        {
+            if (partBuffer[i]->size() < savingNum)
+                ifSave = false;
+        }
+        if (ifSave) 
+        {
+            //Prevent the last part file being empty
+            if (partNo != 0) {
+                this->closeFiles();
+                this->openFiles(rootFolder, experimentNumber, recordingNumber);
+            }
+            partNo++;
+        
+            for (int i=0; i<getNumRecordedChannels();i++)
+            {
+                int idx = processorMap[getChannel(i)->recordIndex];
+                int write_idx = recordedChanToKWDChan[i];
+                fileArray[index]->writeChannel(partBuffer[i]->getRawDataPointer(), savingNum, write_idx);
+                partBuffer[i]->removeRange(0, savingNum);            
+            }                    
+        }
+        partBuffer.getLock().exit();
+    }
+    else { //saving to one file
+        fileArray[index]->writeChannel(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
+    }
 
 //	int sampleOffset = channelLeftOverSamples[writeChannel];
 //	int blockStart = sampleOffset;
@@ -243,16 +275,16 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
 //		}
 //	}
 //	channelLeftOverSamples.set(writeChannel, (size + sampleOffset) % TIMESTAMP_EACH_NSAMPLES);
-    if (savingPeriod != 0) {
-        int64 curTime = Time::currentTimeMillis();
-        if (curTime - lastSaveTime > savingPeriod)
-        {
-            partNo++;
-            this->closeFiles();
-            this->openFiles(rootFolder,experimentNumber,recordingNumber, partNo);
-            lastSaveTime = Time::currentTimeMillis();        
-        }        
-    }
+//    if (savingPeriod != 0) {
+//        int64 curTime = Time::currentTimeMillis();
+//        if (curTime - lastSaveTime > savingPeriod)
+//        {
+//            partNo++;
+//            this->closeFiles();
+//            this->openFiles(rootFolder,experimentNumber,recordingNumber, partNo);
+//            lastSaveTime = Time::currentTimeMillis();        
+//        }        
+//    }
     
 }
 

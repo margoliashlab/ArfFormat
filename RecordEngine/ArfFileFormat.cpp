@@ -790,7 +790,6 @@ void ArfFile::writeBlockData(int16* data, int nSamples)
 void ArfFile::writeChannel(int16* data, int nSamples, int noChannel)
 {
     CHECK_ERROR(recarr[noChannel]->writeDataChannel(nSamples,I16,data));
-    std::cout << getFileName() << std::endl;
 }
 
 void ArfFile::writeRowData(int16* data, int nSamples)
