@@ -32,6 +32,7 @@ namespace H5
 class DataSet;
 class H5File;
 class DataType;
+class CompType;
 }
 
 struct ArfRecordingInfo
@@ -62,7 +63,8 @@ public:
 
     static H5::DataType getNativeType(DataTypes type);
     static H5::DataType getH5Type(DataTypes type);
-
+    
+    
 protected:
 
     virtual int createFileStructure() = 0;
@@ -79,6 +81,7 @@ protected:
     ArfRecordingData* createDataSet(DataTypes type, int sizeX, int sizeY, int chunkX, String path);
     ArfRecordingData* createDataSet(DataTypes type, int sizeX, int sizeY, int sizeZ, int chunkX, String path);
     ArfRecordingData* createDataSet(DataTypes type, int sizeX, int sizeY, int sizeZ, int chunkX, int chunkY, String path);
+    ArfRecordingData* createCompoundDataSet(H5::CompType type, String path);
 
     bool readyToOpen;
 
@@ -167,6 +170,7 @@ public:
     void addEventType(String name, DataTypes type, String dataName);
     String getFileName();
 
+
 protected:
     int createFileStructure();
 
@@ -178,9 +182,16 @@ private:
     OwnedArray<ArfRecordingData> eventID;
     OwnedArray<ArfRecordingData> nodeID;
     OwnedArray<ArfRecordingData> eventData;
+    
+    OwnedArray<ArfRecordingData> eventFullData;
     Array<String> eventNames;
     Array<DataTypes> eventTypes;
     Array<String> eventDataNames;
+    
+    Array<int> eventSizes;
+    Array<H5::CompType> eventCompTypes;
+    Array<HeapBlock<char>> eventBufs;
+    
     int kwdIndex;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AEFile);

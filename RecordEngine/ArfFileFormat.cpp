@@ -402,6 +402,23 @@ ArfRecordingData* ArfFileBase::createDataSet(DataTypes type, int dimension, int*
 
 }
 
+//we only need rank 1
+ArfRecordingData* ArfFileBase::createCompoundDataSet(CompType type, String path)
+{
+    ScopedPointer<DataSet> data;
+    DSetCreatPropList prop;
+    
+    int dimension = 1;
+    hsize_t dims[3] = {1, 0, 0};    
+    hsize_t max_dims[3] = {H5S_UNLIMITED, 0, 0};
+    hsize_t chunk_dims[3] = {EVENT_CHUNK_SIZE, 0, 0};
+    
+    DataSpace dSpace(1, dims, max_dims);
+    prop.setChunk(dimension, chunk_dims);
+    data = new DataSet(file->createDataSet(path.toUTF8(),type,dSpace,prop));
+    return new ArfRecordingData(data.release());  
+}
+
 H5::DataType ArfFileBase::getNativeType(DataTypes type)
 {
     switch (type)
@@ -510,7 +527,7 @@ ArfRecordingData::ArfRecordingData(DataSet* data)
 
 ArfRecordingData::~ArfRecordingData()
 {
-	//Safety
+	
 	dSet->flush(H5F_SCOPE_GLOBAL);
 }
 int ArfRecordingData::writeDataBlock(int xDataSize, ArfFileBase::DataTypes type, void* data)
@@ -843,6 +860,7 @@ void AEFile::initFile(String basename)
     if (isOpen()) return;
     filename = basename + ".kwe";
     readyToOpen=true;
+    
 }
 
 int AEFile::createFileStructure()
@@ -861,6 +879,9 @@ int AEFile::createFileStructure()
         if (!dSet) return -1;
         dSet = createDataSet(U16,0,EVENT_CHUNK_SIZE,path + "/recording");
         if (!dSet) return -1;
+        
+        dSet = createCompoundDataSet(eventCompTypes[i],path + "/full_data");
+        
         path += "/user_data";
         if (createGroup(path)) return -1;
         dSet = createDataSet(U8,0,EVENT_CHUNK_SIZE,path + "/eventID");
@@ -868,7 +889,7 @@ int AEFile::createFileStructure()
         dSet = createDataSet(U8,0,EVENT_CHUNK_SIZE,path + "/nodeID");
         if (!dSet) return -1;
         dSet = createDataSet(eventTypes[i],0,EVENT_CHUNK_SIZE,path + "/" + eventDataNames[i]);
-        if (!dSet) return -1;
+        if (!dSet) return -1;                
     }
     if (setAttribute(U16,(void*)&ver,"/","kwik_version")) return -1;
     return 0;
@@ -887,10 +908,10 @@ void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
     CHECK_ERROR(setAttribute(U32,&(info->bit_depth),recordPath,String("bit_depth")));
    // CHECK_ERROR(createGroup(recordPath + "/raw"));
   //  CHECK_ERROR(createGroup(recordPath + "/raw/hdf5_paths"));
-
     for (int i = 0; i < eventNames.size(); i++)
     {
         ArfRecordingData* dSet;
+        
         String path = "/event_types/" + eventNames[i] + "/events";
         dSet = getDataSet(path + "/time_samples");
         if (!dSet)
@@ -912,6 +933,10 @@ void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
         if (!dSet)
             std::cerr << "Error loading event channel dataset for type " << i << std::endl;
         eventData.add(dSet);
+        
+        dSet = getDataSet(path+ "/full_data");
+        eventFullData.add(dSet);
+
     }
 }
 
@@ -922,6 +947,7 @@ void AEFile::stopRecording()
     eventID.clear();
     nodeID.clear();
     eventData.clear();
+    eventFullData.clear();
 }
 
 void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp)
@@ -936,6 +962,31 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
     CHECK_ERROR(eventID[type]->writeDataBlock(1,U8,&id));
     CHECK_ERROR(nodeID[type]->writeDataBlock(1,U8,&processor));
     CHECK_ERROR(eventData[type]->writeDataBlock(1,eventTypes[type],data));
+    
+    //construct a "struct" that fits that appropriate CompType
+//    HeapBlock<char> hb(eventSizes[type]);
+//    char* buf = hb.getData();
+//    int pos = 0;
+//    memcpy(buf, (char*)&timestamp, sizeof(uint64));
+//    pos += sizeof(uint64);
+//    memcpy(buf+pos, (char*)&recordingNumber, sizeof(int));
+//    pos += sizeof(int);
+//    memcpy(buf+pos, (char*)&id, sizeof(uint8));
+//    pos += sizeof(uint8);
+//    memcpy(buf+pos, (char*)&processor, sizeof(uint8));
+//    pos += sizeof(uint8);
+//    int datasize = 0;
+//    while (buf+datasize != NULL) {
+//        datasize++;
+//    }
+//    memcpy(buf+pos, (char*)data, datasize);
+//    
+////    CHECK_ERROR(eventFullData[type]->writeDataBlock(1,eventCompTypes[type], buf))
+//    hb.free();
+//    
+    
+    
+    
 }
 
 /*void KWEFile::addKwdFile(String filename)
@@ -954,7 +1005,26 @@ void AEFile::addEventType(String name, DataTypes type, String dataName)
 {
     eventNames.add(name);
     eventTypes.add(type);
-    eventDataNames.add(dataName);
+    eventDataNames.add(dataName);  
+    
+    size_t typesize = (type == STR) ? MAX_STR_SIZE : getNativeType(type).getSize();
+    size_t size = sizeof(uint64)+2*sizeof(uint8)+sizeof(int) + typesize;
+    eventSizes.add(size);
+    
+//    eventBufs[eventBufs.size()-1].calloc(size);
+//
+    CompType ctype(size);
+    size_t offset = 0;
+    ctype.insertMember(H5std_string("timestamp"), offset, PredType::NATIVE_INT);
+    offset += sizeof(uint64);
+    ctype.insertMember(H5std_string("recording"), offset, PredType::NATIVE_INT32);
+    offset += sizeof(int);
+    ctype.insertMember(H5std_string("eventID"), offset, PredType::NATIVE_UINT8);
+    offset += sizeof(uint8);
+    ctype.insertMember(H5std_string("nodeID"), offset, PredType::NATIVE_UINT8);
+    offset += sizeof(uint8);
+    ctype.insertMember(H5std_string(dataName.toUTF8()), offset, getNativeType(type));
+    eventCompTypes.add(ctype);
 }
 
 //KWX File
