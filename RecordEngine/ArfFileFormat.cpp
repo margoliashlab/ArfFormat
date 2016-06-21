@@ -409,7 +409,7 @@ ArfRecordingData* ArfFileBase::createCompoundDataSet(CompType type, String path)
     DSetCreatPropList prop;
     
     int dimension = 1;
-    hsize_t dims[3] = {1, 0, 0};    
+    hsize_t dims[3] = {0, 0, 0};    
     hsize_t max_dims[3] = {H5S_UNLIMITED, 0, 0};
     hsize_t chunk_dims[3] = {EVENT_CHUNK_SIZE, 0, 0};
     
@@ -930,7 +930,6 @@ void AEFile::initFile(String basename)
 int AEFile::createFileStructure()
 {
     const uint16 ver = 2;
-    if (createGroup("/recordings")) return -1;
     if (createGroup("/event_types")) return -1;
     for (int i=0; i < eventNames.size(); i++)
     {
@@ -939,23 +938,10 @@ int AEFile::createFileStructure()
         if (createGroup(path)) return -1;
         path += "/events";
         if (createGroup(path)) return -1;
-        dSet = createDataSet(U64,0,EVENT_CHUNK_SIZE,path + "/time_samples");
-        if (!dSet) return -1;
-        dSet = createDataSet(U16,0,EVENT_CHUNK_SIZE,path + "/recording");
-        if (!dSet) return -1;
         
         dSet = createCompoundDataSet(eventCompTypes[i],path + "/full_data");
         
-        path += "/user_data";
-        if (createGroup(path)) return -1;
-        dSet = createDataSet(U8,0,EVENT_CHUNK_SIZE,path + "/eventID");
-        if (!dSet) return -1;
-        dSet = createDataSet(U8,0,EVENT_CHUNK_SIZE,path + "/nodeID");
-        if (!dSet) return -1;
-        dSet = createDataSet(eventTypes[i],0,EVENT_CHUNK_SIZE,path + "/" + eventDataNames[i]);
-        if (!dSet) return -1;                
     }
-    if (setAttribute(U16,(void*)&ver,"/","kwik_version")) return -1;
     return 0;
 }
 
@@ -964,39 +950,11 @@ void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
     this->recordingNumber = recordingNumber;
     kwdIndex=0;
     String recordPath = String("/recordings/")+String(recordingNumber);
-    CHECK_ERROR(createGroup(recordPath));
-    CHECK_ERROR(setAttributeStr(info->name,recordPath,String("name")));
-    CHECK_ERROR(setAttribute(U64,&(info->start_time),recordPath,String("start_time")));
-    //	CHECK_ERROR(setAttribute(U32,&(info->start_sample),recordPath,String("start_sample")));
-    CHECK_ERROR(setAttribute(F32,&(info->sample_rate),recordPath,String("sample_rate")));
-    CHECK_ERROR(setAttribute(U32,&(info->bit_depth),recordPath,String("bit_depth")));
-   // CHECK_ERROR(createGroup(recordPath + "/raw"));
-  //  CHECK_ERROR(createGroup(recordPath + "/raw/hdf5_paths"));
     for (int i = 0; i < eventNames.size(); i++)
     {
         ArfRecordingData* dSet;
         
         String path = "/event_types/" + eventNames[i] + "/events";
-        dSet = getDataSet(path + "/time_samples");
-        if (!dSet)
-            std::cerr << "Error loading event timestamps dataset for type " << i << std::endl;
-        timeStamps.add(dSet);
-        dSet = getDataSet(path + "/recording");
-        if (!dSet)
-            std::cerr << "Error loading event recordings dataset for type " << i << std::endl;
-        recordings.add(dSet);
-        dSet = getDataSet(path + "/user_data/eventID");
-        if (!dSet)
-            std::cerr << "Error loading event ID dataset for type " << i << std::endl;
-        eventID.add(dSet);
-        dSet = getDataSet(path + "/user_data/nodeID");
-        if (!dSet)
-            std::cerr << "Error loading event node ID dataset for type " << i << std::endl;
-        nodeID.add(dSet);
-        dSet = getDataSet(path + "/user_data/" + eventDataNames[i]);
-        if (!dSet)
-            std::cerr << "Error loading event channel dataset for type " << i << std::endl;
-        eventData.add(dSet);
         
         dSet = getDataSet(path+ "/full_data");
         eventFullData.add(dSet);
@@ -1006,11 +964,6 @@ void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
 
 void AEFile::stopRecording()
 {
-    timeStamps.clear();
-    recordings.clear();
-    eventID.clear();
-    nodeID.clear();
-    eventData.clear();
     eventFullData.clear();
 }
 
@@ -1021,12 +974,7 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
         std::cerr << "HDF5::writeEvent Invalid event type " << type << std::endl;
         return;
     }
-    CHECK_ERROR(timeStamps[type]->writeDataBlock(1,U64,&timestamp));
-    CHECK_ERROR(recordings[type]->writeDataBlock(1,I32,&recordingNumber));
-    CHECK_ERROR(eventID[type]->writeDataBlock(1,U8,&id));
-    CHECK_ERROR(nodeID[type]->writeDataBlock(1,U8,&processor));
-    CHECK_ERROR(eventData[type]->writeDataBlock(1,eventTypes[type],data));
-
+    
     //TODO hacky, copy with malloc?
     //Declare here, so that they are still in scope when we call write.
     MessageEvent evm;
@@ -1041,18 +989,17 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
         evm.nodeID = processor;
         String str = String((char*)data);
         str.copyToUTF8(evm.text, MAX_STR_SIZE);
-        evptr = (void*)&evm;
-//        
+        evptr = (void*)&evm;     
     }
     else if (eventNames[type] == "TTL")
     {
         evt.timestamp = timestamp;
+        evt.recording = recordingNumber;
         evt.eventID = id;
         evt.nodeID = processor;
         evt.event_channel = *((uint8*)data);
         evptr = (void*)&evt;
-    }
-    
+    }    
     //Perhaps this could work? That would better if event types were more unpredictable.
     //construct a "struct" that fits that appropriate CompType
 //    HeapBlock<char> hb(eventSizes[type]);
@@ -1078,17 +1025,6 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
     
 }
 
-/*void KWEFile::addKwdFile(String filename)
-{
-	if (kwdIndex == 0)
-	{
-		CHECK_ERROR(setAttributeStr(filename + "/recordings/" + String(recordingNumber), "/recordings/" + String(recordingNumber) +
-			"/raw", "hdf5_path"));
-	}
-    CHECK_ERROR(setAttributeStr(filename + "/recordings/" + String(recordingNumber),"/recordings/" + String(recordingNumber) +
-                                "/raw/hdf5_paths",String(kwdIndex)));
-    kwdIndex++;
-}*/
 
 void AEFile::addEventType(String name, DataTypes type, String dataName)
 {    
@@ -1120,7 +1056,7 @@ void AEFile::addEventType(String name, DataTypes type, String dataName)
     }
     else
     {
-        std::cerr << "Event type" << name << "not implemented; look at ArfFileFormat.cpp"
+        std::cerr << "Event type" << name << "not implemented; look at ArfFileFormat.cpp";
     }
 
 //Again, this is the nice idea for event types. Look at writeEvent.

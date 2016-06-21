@@ -194,11 +194,6 @@ private:
    
     int recordingNumber;
     String filename;
-    OwnedArray<ArfRecordingData> timeStamps;
-    OwnedArray<ArfRecordingData> recordings;
-    OwnedArray<ArfRecordingData> eventID;
-    OwnedArray<ArfRecordingData> nodeID;
-    OwnedArray<ArfRecordingData> eventData;
     
     OwnedArray<ArfRecordingData> eventFullData;
     Array<String> eventNames;
@@ -207,7 +202,6 @@ private:
     
     Array<int> eventSizes;
     Array<H5::CompType> eventCompTypes;
-    Array<HeapBlock<char>> eventBufs;
     
     int kwdIndex;
 
