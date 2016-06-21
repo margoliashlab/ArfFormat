@@ -20,7 +20,7 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
  */
-
+#define MAX_STR_SIZE 256
 #ifndef ARFFILEFORMAT_H_INCLUDED
 #define ARFFILEFORMAT_H_INCLUDED
 
@@ -107,6 +107,8 @@ public:
     int writeDataRow(int yPos, int xDataSize, ArfFileBase::DataTypes type, void* data);
     
     int writeDataChannel(int dataSize, ArfFileBase::DataTypes type, void* data);
+    
+    void writeCompoundData(int xDataSize, int yDataSize, H5::CompType type, void* data);
 
     void getRowXPositions(Array<uint32>& rows);
 
@@ -175,6 +177,21 @@ protected:
     int createFileStructure();
 
 private:
+    typedef struct MessageEvent {
+        uint64 timestamp;
+        int32 recording;
+        uint8 eventID;
+        uint8 nodeID;
+        char text[MAX_STR_SIZE];        
+    } MessageEvent;
+    typedef struct TTLEvent {
+        uint64 timestamp;
+        int32 recording;
+        uint8 eventID;
+        uint8 nodeID;
+        uint8 event_channel;        
+    } TTLEvent;
+   
     int recordingNumber;
     String filename;
     OwnedArray<ArfRecordingData> timeStamps;

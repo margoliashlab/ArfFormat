@@ -46,7 +46,7 @@
 
 #define MAX_TRANSFORM_SIZE 512
 
-#define MAX_STR_SIZE 256
+//#define MAX_STR_SIZE 256 //declared in .h file
 
 #define PROCESS_ERROR std::cerr << error.getCDetailMsg() << std::endl; return -1
 #define CHECK_ERROR(x) if (x) std::cerr << "Error at HDFRecording " << __LINE__ << std::endl;
@@ -612,7 +612,6 @@ int ArfRecordingData::writeDataChannel(int dataSize, ArfFileBase::DataTypes type
     //Create memory space
     dim[0]= dataSize;
     dim[1]= 0;
-    dim[1]= 0;
     dim[2]= 0;
 
     DataSpace mSpace(dimension,dim);
@@ -626,6 +625,71 @@ int ArfRecordingData::writeDataChannel(int dataSize, ArfFileBase::DataTypes type
     
     dSet->write(data,nativeType,mSpace,fSpace);
     xPos = xPos + dataSize;
+}
+
+//writes a compound datatype to a 1d array
+void ArfRecordingData::writeCompoundData(int xDataSize, int yDataSize, CompType type, void* data)
+{
+    hsize_t dim[3],offset[3];
+    DataSpace fSpace;
+    DataType nativeType;
+
+    dim[2] = size[2];
+    //only modify y size if new required size is larger than what we had.
+    if (yDataSize > size[1])
+        dim[1] = yDataSize;
+    else
+        dim[1] = size[1];
+    dim[0] = xPos + xDataSize;
+
+        //First be sure that we have enough space
+        dSet->extend(dim);
+
+        fSpace = dSet->getSpace();
+        fSpace.getSimpleExtentDims(dim);
+        size[0]=dim[0];
+        if (dimension > 1)
+            size[1]=dim[1];
+
+        //Create memory space
+        dim[0]=xDataSize;
+        dim[1]=yDataSize;
+        dim[2] = size[2];
+
+        DataSpace mSpace(dimension,dim);
+        //select where to write
+        offset[0]=xPos;
+        offset[1]=0;
+        offset[2]=0;
+
+        fSpace.selectHyperslab(H5S_SELECT_SET, dim, offset);
+
+        dSet->write(data,type,mSpace,fSpace);
+        xPos += xDataSize;
+
+//    hsize_t dim[3], offset[3];
+//    DataSpace fSpace;
+//
+//    dim[0] = size[0] + 1; //TODO extend by 1? better to double and keep track how many
+//    dim[1] = 0;
+//    dim[2] = 0;
+//    dSet->extend(dim);
+//    
+//    size[0]=dim[0];
+//    
+//    fSpace = dSet->getSpace();
+//    fSpace.getSimpleExtentDims(dim);
+//    
+//    
+//    //create memory space
+//    dim[0]=0; dim[1]=0; dim[2]=0;
+//    offset[0]=xPos; offset[1]=0; offset[2]=0;
+//    
+//    DataSpace mSpace(1,dim);
+//    fSpace.selectHyperslab(H5S_SELECT_SET, dim, offset);
+//    
+//    dSet->write(data, type, mSpace, fSpace);
+//    xPos = xPos+1;
 }
 
 
@@ -962,7 +1026,34 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
     CHECK_ERROR(eventID[type]->writeDataBlock(1,U8,&id));
     CHECK_ERROR(nodeID[type]->writeDataBlock(1,U8,&processor));
     CHECK_ERROR(eventData[type]->writeDataBlock(1,eventTypes[type],data));
+
+    //TODO hacky, copy with malloc?
+    //Declare here, so that they are still in scope when we call write.
+    MessageEvent evm;
+    TTLEvent evt;
+    void* evptr;
+
+    if (eventNames[type] == "Messages")
+    {
+        evm.timestamp = timestamp;
+        evm.recording = recordingNumber;
+        evm.eventID = id;
+        evm.nodeID = processor;
+        String str = String((char*)data);
+        str.copyToUTF8(evm.text, MAX_STR_SIZE);
+        evptr = (void*)&evm;
+//        
+    }
+    else if (eventNames[type] == "TTL")
+    {
+        evt.timestamp = timestamp;
+        evt.eventID = id;
+        evt.nodeID = processor;
+        evt.event_channel = *((uint8*)data);
+        evptr = (void*)&evt;
+    }
     
+    //Perhaps this could work? That would better if event types were more unpredictable.
     //construct a "struct" that fits that appropriate CompType
 //    HeapBlock<char> hb(eventSizes[type]);
 //    char* buf = hb.getData();
@@ -975,15 +1066,13 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
 //    pos += sizeof(uint8);
 //    memcpy(buf+pos, (char*)&processor, sizeof(uint8));
 //    pos += sizeof(uint8);
-//    int datasize = 0;
-//    while (buf+datasize != NULL) {
-//        datasize++;
-//    }
+//    int datasize;
+//    //strings that are passed can be of variable length, all other types are fixed length
+//    datasize = (eventTypes[type] == STR) ? strlen((char*)data) : getNativeType(eventTypes[type]).getSize();
 //    memcpy(buf+pos, (char*)data, datasize);
-//    
-////    CHECK_ERROR(eventFullData[type]->writeDataBlock(1,eventCompTypes[type], buf))
+    eventFullData[type]->writeCompoundData(1, 0, eventCompTypes[type], evptr);
 //    hb.free();
-//    
+    
     
     
     
@@ -1002,7 +1091,7 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
 }*/
 
 void AEFile::addEventType(String name, DataTypes type, String dataName)
-{
+{    
     eventNames.add(name);
     eventTypes.add(type);
     eventDataNames.add(dataName);  
@@ -1010,21 +1099,44 @@ void AEFile::addEventType(String name, DataTypes type, String dataName)
     size_t typesize = (type == STR) ? MAX_STR_SIZE : getNativeType(type).getSize();
     size_t size = sizeof(uint64)+2*sizeof(uint8)+sizeof(int) + typesize;
     eventSizes.add(size);
-    
-//    eventBufs[eventBufs.size()-1].calloc(size);
-//
     CompType ctype(size);
-    size_t offset = 0;
-    ctype.insertMember(H5std_string("timestamp"), offset, PredType::NATIVE_INT);
-    offset += sizeof(uint64);
-    ctype.insertMember(H5std_string("recording"), offset, PredType::NATIVE_INT32);
-    offset += sizeof(int);
-    ctype.insertMember(H5std_string("eventID"), offset, PredType::NATIVE_UINT8);
-    offset += sizeof(uint8);
-    ctype.insertMember(H5std_string("nodeID"), offset, PredType::NATIVE_UINT8);
-    offset += sizeof(uint8);
-    ctype.insertMember(H5std_string(dataName.toUTF8()), offset, getNativeType(type));
-    eventCompTypes.add(ctype);
+    if (name == "Messages")
+    {
+        ctype.insertMember(H5std_string("timestamp"), HOFFSET(MessageEvent, timestamp), PredType::NATIVE_UINT64);
+        ctype.insertMember(H5std_string("recording"), HOFFSET(MessageEvent, recording), PredType::NATIVE_INT32);
+        ctype.insertMember(H5std_string("eventID"), HOFFSET(MessageEvent, eventID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("nodeID"), HOFFSET(MessageEvent, nodeID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("Text"), HOFFSET(MessageEvent, text), getNativeType(type));        
+        eventCompTypes.add(ctype);
+    }
+    else if (name == "TTL")
+    {
+        ctype.insertMember(H5std_string("timestamp"), HOFFSET(TTLEvent, timestamp), PredType::NATIVE_UINT64);
+        ctype.insertMember(H5std_string("recording"), HOFFSET(TTLEvent, recording), PredType::NATIVE_INT32);
+        ctype.insertMember(H5std_string("eventID"), HOFFSET(TTLEvent, eventID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("nodeID"), HOFFSET(TTLEvent, nodeID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("event_channel"), HOFFSET(TTLEvent, event_channel), getNativeType(type));
+        eventCompTypes.add(ctype);      
+    }
+    else
+    {
+        std::cerr << "Event type" << name << "not implemented; look at ArfFileFormat.cpp"
+    }
+
+//Again, this is the nice idea for event types. Look at writeEvent.
+//    eventCompTypes.add(ctype);
+//
+//    size_t offset = 0;
+//    ctype.insertMember(H5std_string("timestamp"), offset, PredType::NATIVE_UINT64);
+//    offset += sizeof(uint64);
+//    ctype.insertMember(H5std_string("recording"), offset, PredType::NATIVE_INT32);
+//    offset += sizeof(int);
+//    ctype.insertMember(H5std_string("eventID"), offset, PredType::NATIVE_UINT8);
+//    offset += sizeof(uint8);
+//    ctype.insertMember(H5std_string("nodeID"), offset, PredType::NATIVE_UINT8);
+//    offset += sizeof(uint8);
+//    ctype.insertMember(H5std_string(dataName.toUTF8()), offset, getNativeType(type));
+//    eventCompTypes.add(ctype);
 }
 
 //KWX File
