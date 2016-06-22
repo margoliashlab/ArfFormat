@@ -21,6 +21,7 @@
 
  */
 #define MAX_STR_SIZE 256
+#define MAX_TRANSFORM_SIZE 512
 #ifndef ARFFILEFORMAT_H_INCLUDED
 #define ARFFILEFORMAT_H_INCLUDED
 
@@ -33,6 +34,8 @@ class DataSet;
 class H5File;
 class DataType;
 class CompType;
+class ArrayType;
+
 }
 
 struct ArfRecordingInfo
@@ -81,7 +84,7 @@ protected:
     ArfRecordingData* createDataSet(DataTypes type, int sizeX, int sizeY, int chunkX, String path);
     ArfRecordingData* createDataSet(DataTypes type, int sizeX, int sizeY, int sizeZ, int chunkX, String path);
     ArfRecordingData* createDataSet(DataTypes type, int sizeX, int sizeY, int sizeZ, int chunkX, int chunkY, String path);
-    ArfRecordingData* createCompoundDataSet(H5::CompType type, String path);
+    ArfRecordingData* createCompoundDataSet(H5::CompType type, String path, int dimension, int* max_dims, int* chunk_dims);
 
     bool readyToOpen;
 
@@ -108,7 +111,7 @@ public:
     
     int writeDataChannel(int dataSize, ArfFileBase::DataTypes type, void* data);
     
-    void writeCompoundData(int xDataSize, int yDataSize, H5::CompType type, void* data);
+    void writeCompoundData(int xDataSize, int yDataSize, H5::DataType type, void* data);
 
     void getRowXPositions(Array<uint32>& rows);
 
@@ -232,10 +235,22 @@ private:
     OwnedArray<ArfRecordingData> spikeArray;
     OwnedArray<ArfRecordingData> recordingArray;
     OwnedArray<ArfRecordingData> timeStamps;
+    
+    OwnedArray<ArfRecordingData> spikeFullDataArray;
+    
     Array<int> channelArray;
     int numElectrodes;
 	HeapBlock<int16> transformVector;
     //int16* transformVector;
+    
+    typedef struct SpikeInfo {
+        uint64 timestamp;
+        int recording;
+        int16 waveform[MAX_TRANSFORM_SIZE];
+    } SpikeInfo;
+    Array<H5::CompType> spikeCompTypes;
+    SpikeInfo spikeinfo;
+    
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AXFile);
 };
