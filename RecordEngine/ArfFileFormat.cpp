@@ -1128,14 +1128,14 @@ int AXFile::createChannelGroup(int index)
     int nChannels = channelArray[index];
     String path("/channel_groups/"+String(index));
     CHECK_ERROR(createGroup(path));
-    dSet = createDataSet(I16,0,0,nChannels,SPIKE_CHUNK_XSIZE,SPIKE_CHUNK_YSIZE,path+"/waveforms_filtered");
-    if (!dSet) return -1;
-    dSet = createDataSet(U64,0,SPIKE_CHUNK_XSIZE,path+"/time_samples");
-    if (!dSet) return -1;
-    dSet = createDataSet(U16,0,SPIKE_CHUNK_XSIZE,path+"/recordings");
-    if (!dSet) return -1;
+//    dSet = createDataSet(I16,0,0,nChannels,SPIKE_CHUNK_XSIZE,SPIKE_CHUNK_YSIZE,path+"/waveforms_filtered");
+//    if (!dSet) return -1;
+//    dSet = createDataSet(U64,0,SPIKE_CHUNK_XSIZE,path+"/time_samples");
+//    if (!dSet) return -1;
+//    dSet = createDataSet(U16,0,SPIKE_CHUNK_XSIZE,path+"/recordings");
+//    if (!dSet) return -1;
     
-    int max_dims[3] = {0, 0, 0}; //first dimension 0, since we set chunking, so it's unlimited anyway
+    int max_dims[3] = {0, 0, 0}; //first dimension set to 0, because we want it unlimited
     int chunk_dims[3] = {SPIKE_CHUNK_XSIZE, 0, 0};
     dSet = createCompoundDataSet(spikeCompTypes[index], path+"/full_data", 1, max_dims, chunk_dims);
     
@@ -1151,18 +1151,18 @@ void AXFile::startNewRecording(int recordingNumber)
     for (int i=0; i < channelArray.size(); i++)
     {
         path = "/channel_groups/"+String(i);
-        dSet=getDataSet(path+"/waveforms_filtered");
-        if (!dSet)
-            std::cerr << "Error loading spikes dataset for group " << i << std::endl;
-        spikeArray.add(dSet);
-        dSet=getDataSet(path+"/time_samples");
-        if (!dSet)
-            std::cerr << "Error loading spike timestamp dataset for group " << i << std::endl;
-        timeStamps.add(dSet);
-        dSet=getDataSet(path+"/recordings");
-        if (!dSet)
-            std::cerr << "Error loading spike recordings dataset for group " << i << std::endl;
-        recordingArray.add(dSet);
+//        dSet=getDataSet(path+"/waveforms_filtered");
+//        if (!dSet)
+//            std::cerr << "Error loading spikes dataset for group " << i << std::endl;
+//        spikeArray.add(dSet);
+//        dSet=getDataSet(path+"/time_samples");
+//        if (!dSet)
+//            std::cerr << "Error loading spike timestamp dataset for group " << i << std::endl;
+//        timeStamps.add(dSet);
+//        dSet=getDataSet(path+"/recordings");
+//        if (!dSet)
+//            std::cerr << "Error loading spike recordings dataset for group " << i << std::endl;
+//        recordingArray.add(dSet);
         
         dSet = getDataSet(path+"/full_data");
         spikeFullDataArray.add(dSet);
@@ -1171,9 +1171,11 @@ void AXFile::startNewRecording(int recordingNumber)
 
 void AXFile::stopRecording()
 {
-    spikeArray.clear();
-    timeStamps.clear();
-    recordingArray.clear();
+//    spikeArray.clear();
+//    timeStamps.clear();
+//    recordingArray.clear();
+    spikeFullDataArray.clear();
+    
 }
 
 void AXFile::resetChannels()
@@ -1190,6 +1192,11 @@ void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, uint64
         return;
     }
     int nChans= channelArray[groupIndex];
+    
+    if (nSamples > MAX_TRANSFORM_SIZE)
+    {
+        std::cerr << "Spike nSamples is bigger than MAX_TRANSFORM_SIZE/nChannels in group" << groupIndex << std::endl;
+    }
     
     spikeinfo.recording = recordingNumber;
     spikeinfo.timestamp = timestamp;
@@ -1213,8 +1220,7 @@ void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, uint64
     
     spikeFullDataArray[groupIndex]->writeCompoundData(1, 0, spikeCompTypes[groupIndex], (void*)&spikeinfo);
 
-    CHECK_ERROR(spikeArray[groupIndex]->writeDataBlock(1,nSamples,I16,transformVector));
-    CHECK_ERROR(recordingArray[groupIndex]->writeDataBlock(1,I32,&recordingNumber));
-    CHECK_ERROR(timeStamps[groupIndex]->writeDataBlock(1,U64,&timestamp));
-    std::cout << spikeinfo.timestamp << std::endl;
+//    CHECK_ERROR(spikeArray[groupIndex]->writeDataBlock(1,nSamples,I16,transformVector));
+//    CHECK_ERROR(recordingArray[groupIndex]->writeDataBlock(1,I32,&recordingNumber));
+//    CHECK_ERROR(timeStamps[groupIndex]->writeDataBlock(1,U64,&timestamp));
 }
