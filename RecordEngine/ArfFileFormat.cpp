@@ -920,6 +920,8 @@ int AEFile::createFileStructure()
 {
     const uint16 ver = 2;
     if (createGroup("/event_types")) return -1;
+    String uuid = Uuid().toDashedString();
+    CHECK_ERROR(setAttributeStr(uuid, String("event_types"), String("uuid")));
     for (int i=0; i < eventNames.size(); i++)
     {
         ScopedPointer<ArfRecordingData> dSet;
@@ -930,6 +932,7 @@ int AEFile::createFileStructure()
         int max_dims[3] = {0, 0, 0};
         int chunk_dims[3] = {EVENT_CHUNK_SIZE, 0, 0};
         dSet = createCompoundDataSet(eventCompTypes[i],path + "/full_data", 1, max_dims, chunk_dims);
+        CHECK_ERROR(setAttributeStr(String("samples"), path+"/full_data", String("units")));
         
     }
     return 0;
@@ -1099,6 +1102,8 @@ int AXFile::createFileStructure()
 {
     const uint16 ver = 2;
     if (createGroup("/channel_groups")) return -1;
+    String uuid = Uuid().toDashedString();
+    CHECK_ERROR(setAttributeStr(uuid, String("/channel_groups"), String("uuid")));
     if (setAttribute(U16,(void*)&ver,"/","kwik_version")) return -1;
     for (int i=0; i < channelArray.size(); i++)
     {
@@ -1138,6 +1143,7 @@ int AXFile::createChannelGroup(int index)
     int max_dims[3] = {0, 0, 0}; //first dimension set to 0, because we want it unlimited
     int chunk_dims[3] = {SPIKE_CHUNK_XSIZE, 0, 0};
     dSet = createCompoundDataSet(spikeCompTypes[index], path+"/full_data", 1, max_dims, chunk_dims);
+    CHECK_ERROR(setAttributeStr(String("samples"), path+"/full_data", String("units")));
     
     return 0;
 }
