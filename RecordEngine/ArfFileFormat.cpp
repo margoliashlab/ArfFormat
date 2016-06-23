@@ -144,7 +144,7 @@ int ArfFileBase::setAttribute(DataTypes type, void* data, String path, String na
 }
 
 
-//setAttributeArray set array as a single value in the attribute; this function set the array as the attribute
+//Create array of type TYPE, versus setAttributeArray that creates a scalar of type array
 int ArfFileBase::setAttributeAsArray(DataTypes type, void* data, int size, String path, String name)
 {
     H5Location* loc;
@@ -172,12 +172,6 @@ int ArfFileBase::setAttributeAsArray(DataTypes type, void* data, int size, Strin
         origType = getNativeType(type);
 
         hsize_t dims = size;
-//        if (size > 1)
-//        {
-//            hsize_t dims = size;
-//            H5type = ArrayType(H5type,1,&dims);
-//            origType = ArrayType(origType,1,&dims);
-//        }
 
         if (loc->attrExists(name.toUTF8()))
         {
@@ -853,35 +847,25 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
     String recordPath = String("/rec_")+String(recordingNumber);
     CHECK_ERROR(createGroup(recordPath));
     CHECK_ERROR(setAttributeStr(info->name,recordPath,String("name")));
+//TODO these attributes are just 0? not sure
 //    CHECK_ERROR(setAttribute(U64,&(info->start_time),recordPath,String("start_time")));
 //    CHECK_ERROR(setAttribute(U32,&(info->start_sample),recordPath,String("start_sample")));
-//    CHECK_ERROR(setAttribute(F32,&(info->sample_rate),recordPath,String("sample_rate")));
     CHECK_ERROR(setAttribute(U32,&(info->bit_depth),recordPath,String("bit_depth")));
-    CHECK_ERROR(createGroup(recordPath+"/application_data"));
 
     CHECK_ERROR(setAttribute(U8,&mSample,recordPath,String("is_multiSampleRate_data")));
 
-    
-    //TODO either array of 2 numbers seconds, microseconds, or a float
-    int64 timeMilli = Time::currentTimeMillis(); //convert to seconds
-    int64 times[2] = {timeMilli/1000, (timeMilli%1000)*1000}; //TODO should be other timestamp? but each processor separately anyway
+    //TODO perhaps move this to ArfRecording, pass to all files, so that you can calculate relative time
+    int64 timeMilli = Time::currentTimeMillis();
+    int64 times[2] = {timeMilli/1000, (timeMilli%1000)*1000};
     setAttributeAsArray(I64, times, 2, recordPath, "timestamp");
-//    CHECK_ERROR(setAttribute(I64,&timestamp, recordPath, String("timestamp")));
     
     String uuid = Uuid().toDashedString();
     CHECK_ERROR(setAttributeStr(uuid, recordPath, String("uuid")));
-    
-
-//    recdata = createDataSet(I16,0,nChannels,CHUNK_XSIZE,recordPath+"/data");
-//    if (!recdata.get())
-//        std::cerr << "Error creating data set" << std::endl;
-//TODO remove this
         
     for (int i = 0; i<nChannels; i++) {        
-        //separate DataSet for each channel
-        //TODO error checking, memleaks?
+        //separate Dataset for each channel
         String channelPath = recordPath+"/channel"+String(i);
-        //TODO attributes for datasets
+        
         recarr.add(createDataSet(I16, 0, CHUNK_XSIZE, channelPath));
         CHECK_ERROR(setAttribute(F32, info->channelSampleRates.getRawDataPointer()+i, channelPath, String("sampling_rate")));
         CHECK_ERROR(setAttribute(F32, info->bitVolts.getRawDataPointer()+i, channelPath, String("bit_volts")));
@@ -904,18 +888,15 @@ void ArfFile::stopRecording()
 //    recdata->getRowXPositions(samples);
 
 //    CHECK_ERROR(setAttributeArray(U32,samples.getRawDataPointer(),samples.size(),path,"valid_samples"));
-//TODO remove this
+//TODO maybe it makes sense to think about valid samples? but we only resize as we save, also there will be lock on stopping when saving
     //ScopedPointer does the deletion and destructors the closings
     recdata = nullptr;
-    //TODO clear recarr?
     recarr.clear();
 	tsData = nullptr;
 }
 
 int ArfFile::createFileStructure()
 {
-//    if (createGroup("/recordings")) return -1;
-//TODO remove
     if (setAttributeStr(ARF_VERSION, "/", "arf_version")) return -1;
     return 0;
 }
