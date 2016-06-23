@@ -48,6 +48,8 @@
 
 //#define MAX_STR_SIZE 256 //defined in .h file
 
+#define ARF_VERSION "2.1"
+
 #define PROCESS_ERROR std::cerr << error.getCDetailMsg() << std::endl; return -1
 #define CHECK_ERROR(x) if (x) std::cerr << "Error at HDFRecording " << __LINE__ << std::endl;
 
@@ -141,6 +143,74 @@ int ArfFileBase::setAttribute(DataTypes type, void* data, String path, String na
     return setAttributeArray(type, data, 1, path, name);
 }
 
+
+//setAttributeArray set array as a single value in the attribute; this function set the array as the attribute
+int ArfFileBase::setAttributeAsArray(DataTypes type, void* data, int size, String path, String name)
+{
+    H5Location* loc;
+    Group gloc;
+    DataSet dloc;
+    Attribute attr;
+    DataType H5type;
+    DataType origType;
+
+    if (!opened) return -1;
+    try
+    {
+        try
+        {
+            gloc = file->openGroup(path.toUTF8());
+            loc = &gloc;
+        }
+        catch (FileIException error) //If there is no group with that path, try a dataset
+        {
+            dloc = file->openDataSet(path.toUTF8());
+            loc = &dloc;
+        }
+
+        H5type = getH5Type(type);
+        origType = getNativeType(type);
+
+        hsize_t dims = size;
+//        if (size > 1)
+//        {
+//            hsize_t dims = size;
+//            H5type = ArrayType(H5type,1,&dims);
+//            origType = ArrayType(origType,1,&dims);
+//        }
+
+        if (loc->attrExists(name.toUTF8()))
+        {
+            attr = loc->openAttribute(name.toUTF8());
+        }
+        else
+        {
+            DataSpace attr_dataspace(1, &dims); //create a 1d simple dataspace of len SIZE
+            attr = loc->createAttribute(name.toUTF8(),H5type,attr_dataspace);
+        }
+
+        attr.write(origType,data);
+
+    }
+    catch (GroupIException error)
+    {
+        PROCESS_ERROR;
+    }
+    catch (AttributeIException error)
+    {
+        PROCESS_ERROR;
+    }
+    catch (DataSetIException error)
+    {
+        PROCESS_ERROR;
+    }
+    catch (FileIException error)
+    {
+        PROCESS_ERROR;
+    }
+
+    return 0;
+}
 
 int ArfFileBase::setAttributeArray(DataTypes type, void* data, int size, String path, String name)
 {
@@ -787,16 +857,16 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
 //    CHECK_ERROR(setAttribute(U32,&(info->start_sample),recordPath,String("start_sample")));
 //    CHECK_ERROR(setAttribute(F32,&(info->sample_rate),recordPath,String("sample_rate")));
     CHECK_ERROR(setAttribute(U32,&(info->bit_depth),recordPath,String("bit_depth")));
-    //TODO what is bit_depth?
     CHECK_ERROR(createGroup(recordPath+"/application_data"));
 
     CHECK_ERROR(setAttribute(U8,&mSample,recordPath,String("is_multiSampleRate_data")));
 
     
     //TODO either array of 2 numbers seconds, microseconds, or a float
-    int64 timestamp = Time::currentTimeMillis()/1000; //convert to seconds
-//    int64 times[2] = {timestamp, 0}; //TODO should be other timestamp? but each processor separately anyway
-    CHECK_ERROR(setAttribute(I64,&timestamp, recordPath, String("timestamp")));
+    int64 timeMilli = Time::currentTimeMillis(); //convert to seconds
+    int64 times[2] = {timeMilli/1000, (timeMilli%1000)*1000}; //TODO should be other timestamp? but each processor separately anyway
+    setAttributeAsArray(I64, times, 2, recordPath, "timestamp");
+//    CHECK_ERROR(setAttribute(I64,&timestamp, recordPath, String("timestamp")));
     
     String uuid = Uuid().toDashedString();
     CHECK_ERROR(setAttributeStr(uuid, recordPath, String("uuid")));
@@ -844,11 +914,9 @@ void ArfFile::stopRecording()
 
 int ArfFile::createFileStructure()
 {
-    const uint16 ver = 2;
 //    if (createGroup("/recordings")) return -1;
 //TODO remove
-    //TODO what version?
-//    if (setAttribute(U16,(void*)&ver,"/","arf_version")) return -1;
+    if (setAttributeStr(ARF_VERSION, "/", "arf_version")) return -1;
     return 0;
 }
 
@@ -918,7 +986,7 @@ void AEFile::initFile(String basename)
 
 int AEFile::createFileStructure()
 {
-    const uint16 ver = 2;
+    if (setAttributeStr(ARF_VERSION, "/", "arf_version")) return -1;
     if (createGroup("/event_types")) return -1;
     String uuid = Uuid().toDashedString();
     CHECK_ERROR(setAttributeStr(uuid, String("event_types"), String("uuid")));
@@ -1104,7 +1172,7 @@ int AXFile::createFileStructure()
     if (createGroup("/channel_groups")) return -1;
     String uuid = Uuid().toDashedString();
     CHECK_ERROR(setAttributeStr(uuid, String("/channel_groups"), String("uuid")));
-    if (setAttribute(U16,(void*)&ver,"/","kwik_version")) return -1;
+    if (setAttributeStr(ARF_VERSION, "/", "arf_version")) return -1;
     for (int i=0; i < channelArray.size(); i++)
     {
         int res = createChannelGroup(i);

@@ -74,6 +74,7 @@ protected:
 
     int setAttribute(DataTypes type, void* data, String path, String name);
     int setAttributeStr(String value, String path, String name);
+    int setAttributeAsArray(DataTypes type, void* data, int size, String path, String name);
     int setAttributeArray(DataTypes type, void* data, int size, String path, String name);
     int createGroup(String path);
 
