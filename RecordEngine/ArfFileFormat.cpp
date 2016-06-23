@@ -44,9 +44,9 @@
 #define TIMESTAMP_CHUNK_SIZE 16
 #endif
 
-#define MAX_TRANSFORM_SIZE 512
+//#define MAX_TRANSFORM_SIZE 512 //defined in .h file
 
-#define MAX_STR_SIZE 256
+//#define MAX_STR_SIZE 256 //defined in .h file
 
 #define PROCESS_ERROR std::cerr << error.getCDetailMsg() << std::endl; return -1
 #define CHECK_ERROR(x) if (x) std::cerr << "Error at HDFRecording " << __LINE__ << std::endl;
@@ -402,6 +402,37 @@ ArfRecordingData* ArfFileBase::createDataSet(DataTypes type, int dimension, int*
 
 }
 
+//If dimension should be unlimited, set chunk_dims=NCHUNK and max_dims=0. If limited, set max_dims=N and chunk_dims=N.
+ArfRecordingData* ArfFileBase::createCompoundDataSet(CompType type, String path, int dimension, int* max_dims, int* chunk_dims)
+{
+    ScopedPointer<DataSet> data;
+    DSetCreatPropList prop;
+    
+    hsize_t Hdims[3];
+    hsize_t Hmax_dims [3];
+    hsize_t Hchunk_dims[3];
+
+    for (int i=0; i < dimension; i++)
+    {
+        Hchunk_dims[i] = chunk_dims[i];
+        if (chunk_dims[i] > 0 && chunk_dims[i] != max_dims[i])
+        {
+            Hmax_dims[i] = H5S_UNLIMITED;
+            Hdims[i] = 0;
+        }
+        else
+        {
+            Hmax_dims[i] = max_dims[i];
+            Hdims[i] = max_dims[i];
+        }
+    }   
+    
+    DataSpace dSpace(dimension, Hdims, Hmax_dims);
+    prop.setChunk(dimension, Hchunk_dims);
+    data = new DataSet(file->createDataSet(path.toUTF8(),type,dSpace,prop));
+    return new ArfRecordingData(data.release());  
+}
+
 H5::DataType ArfFileBase::getNativeType(DataTypes type)
 {
     switch (type)
@@ -510,7 +541,7 @@ ArfRecordingData::ArfRecordingData(DataSet* data)
 
 ArfRecordingData::~ArfRecordingData()
 {
-	//Safety
+	
 	dSet->flush(H5F_SCOPE_GLOBAL);
 }
 int ArfRecordingData::writeDataBlock(int xDataSize, ArfFileBase::DataTypes type, void* data)
@@ -595,7 +626,6 @@ int ArfRecordingData::writeDataChannel(int dataSize, ArfFileBase::DataTypes type
     //Create memory space
     dim[0]= dataSize;
     dim[1]= 0;
-    dim[1]= 0;
     dim[2]= 0;
 
     DataSpace mSpace(dimension,dim);
@@ -609,6 +639,46 @@ int ArfRecordingData::writeDataChannel(int dataSize, ArfFileBase::DataTypes type
     
     dSet->write(data,nativeType,mSpace,fSpace);
     xPos = xPos + dataSize;
+}
+
+void ArfRecordingData::writeCompoundData(int xDataSize, int yDataSize, DataType type, void* data)
+{
+    hsize_t dim[3],offset[3];
+    DataSpace fSpace;
+    DataType nativeType;
+
+    dim[2] = size[2];
+    //only modify y size if new required size is larger than what we had.
+    if (yDataSize > size[1])
+        dim[1] = yDataSize;
+    else
+        dim[1] = size[1];
+    dim[0] = xPos + xDataSize;
+
+        //First be sure that we have enough space
+        dSet->extend(dim);
+
+        fSpace = dSet->getSpace();
+        fSpace.getSimpleExtentDims(dim);
+        size[0]=dim[0];
+        if (dimension > 1)
+            size[1]=dim[1];
+
+        //Create memory space
+        dim[0]=xDataSize;
+        dim[1]=yDataSize;
+        dim[2] = size[2];
+
+        DataSpace mSpace(dimension,dim);
+        //select where to write
+        offset[0]=xPos;
+        offset[1]=0;
+        offset[2]=0;
+
+        fSpace.selectHyperslab(H5S_SELECT_SET, dim, offset);
+
+        dSet->write(data,type,mSpace,fSpace);
+        xPos += xDataSize;
 }
 
 
@@ -843,12 +913,12 @@ void AEFile::initFile(String basename)
     if (isOpen()) return;
     filename = basename + ".kwe";
     readyToOpen=true;
+    
 }
 
 int AEFile::createFileStructure()
 {
     const uint16 ver = 2;
-    if (createGroup("/recordings")) return -1;
     if (createGroup("/event_types")) return -1;
     for (int i=0; i < eventNames.size(); i++)
     {
@@ -857,20 +927,11 @@ int AEFile::createFileStructure()
         if (createGroup(path)) return -1;
         path += "/events";
         if (createGroup(path)) return -1;
-        dSet = createDataSet(U64,0,EVENT_CHUNK_SIZE,path + "/time_samples");
-        if (!dSet) return -1;
-        dSet = createDataSet(U16,0,EVENT_CHUNK_SIZE,path + "/recording");
-        if (!dSet) return -1;
-        path += "/user_data";
-        if (createGroup(path)) return -1;
-        dSet = createDataSet(U8,0,EVENT_CHUNK_SIZE,path + "/eventID");
-        if (!dSet) return -1;
-        dSet = createDataSet(U8,0,EVENT_CHUNK_SIZE,path + "/nodeID");
-        if (!dSet) return -1;
-        dSet = createDataSet(eventTypes[i],0,EVENT_CHUNK_SIZE,path + "/" + eventDataNames[i]);
-        if (!dSet) return -1;
+        int max_dims[3] = {0, 0, 0};
+        int chunk_dims[3] = {EVENT_CHUNK_SIZE, 0, 0};
+        dSet = createCompoundDataSet(eventCompTypes[i],path + "/full_data", 1, max_dims, chunk_dims);
+        
     }
-    if (setAttribute(U16,(void*)&ver,"/","kwik_version")) return -1;
     return 0;
 }
 
@@ -879,49 +940,21 @@ void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
     this->recordingNumber = recordingNumber;
     kwdIndex=0;
     String recordPath = String("/recordings/")+String(recordingNumber);
-    CHECK_ERROR(createGroup(recordPath));
-    CHECK_ERROR(setAttributeStr(info->name,recordPath,String("name")));
-    CHECK_ERROR(setAttribute(U64,&(info->start_time),recordPath,String("start_time")));
-    //	CHECK_ERROR(setAttribute(U32,&(info->start_sample),recordPath,String("start_sample")));
-    CHECK_ERROR(setAttribute(F32,&(info->sample_rate),recordPath,String("sample_rate")));
-    CHECK_ERROR(setAttribute(U32,&(info->bit_depth),recordPath,String("bit_depth")));
-   // CHECK_ERROR(createGroup(recordPath + "/raw"));
-  //  CHECK_ERROR(createGroup(recordPath + "/raw/hdf5_paths"));
-
     for (int i = 0; i < eventNames.size(); i++)
     {
         ArfRecordingData* dSet;
+        
         String path = "/event_types/" + eventNames[i] + "/events";
-        dSet = getDataSet(path + "/time_samples");
-        if (!dSet)
-            std::cerr << "Error loading event timestamps dataset for type " << i << std::endl;
-        timeStamps.add(dSet);
-        dSet = getDataSet(path + "/recording");
-        if (!dSet)
-            std::cerr << "Error loading event recordings dataset for type " << i << std::endl;
-        recordings.add(dSet);
-        dSet = getDataSet(path + "/user_data/eventID");
-        if (!dSet)
-            std::cerr << "Error loading event ID dataset for type " << i << std::endl;
-        eventID.add(dSet);
-        dSet = getDataSet(path + "/user_data/nodeID");
-        if (!dSet)
-            std::cerr << "Error loading event node ID dataset for type " << i << std::endl;
-        nodeID.add(dSet);
-        dSet = getDataSet(path + "/user_data/" + eventDataNames[i]);
-        if (!dSet)
-            std::cerr << "Error loading event channel dataset for type " << i << std::endl;
-        eventData.add(dSet);
+        
+        dSet = getDataSet(path+ "/full_data");
+        eventFullData.add(dSet);
+
     }
 }
 
 void AEFile::stopRecording()
 {
-    timeStamps.clear();
-    recordings.clear();
-    eventID.clear();
-    nodeID.clear();
-    eventData.clear();
+    eventFullData.clear();
 }
 
 void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp)
@@ -931,30 +964,104 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
         std::cerr << "HDF5::writeEvent Invalid event type " << type << std::endl;
         return;
     }
-    CHECK_ERROR(timeStamps[type]->writeDataBlock(1,U64,&timestamp));
-    CHECK_ERROR(recordings[type]->writeDataBlock(1,I32,&recordingNumber));
-    CHECK_ERROR(eventID[type]->writeDataBlock(1,U8,&id));
-    CHECK_ERROR(nodeID[type]->writeDataBlock(1,U8,&processor));
-    CHECK_ERROR(eventData[type]->writeDataBlock(1,eventTypes[type],data));
+    
+    //TODO hacky, copy with malloc?
+    //Declare here, so that they are still in scope when we call write.
+    MessageEvent evm;
+    TTLEvent evt;
+    void* evptr;
+
+    if (eventNames[type] == "Messages")
+    {
+        evm.timestamp = timestamp;
+        evm.recording = recordingNumber;
+        evm.eventID = id;
+        evm.nodeID = processor;
+        String str = String((char*)data);
+        str.copyToUTF8(evm.text, MAX_STR_SIZE);
+        evptr = (void*)&evm;     
+    }
+    else if (eventNames[type] == "TTL")
+    {
+        evt.timestamp = timestamp;
+        evt.recording = recordingNumber;
+        evt.eventID = id;
+        evt.nodeID = processor;
+        evt.event_channel = *((uint8*)data);
+        evptr = (void*)&evt;
+    }    
+    //Perhaps this could work? Particularly useful if there are more different event types, otherwise whatever.
+    //fill a buffer that pretends to be a struct for CompType
+//    HeapBlock<char> hb(eventSizes[type]);
+//    char* buf = hb.getData();
+//    int pos = 0;
+//    memcpy(buf, (char*)&timestamp, sizeof(uint64));
+//    pos += sizeof(uint64);
+//    memcpy(buf+pos, (char*)&recordingNumber, sizeof(int));
+//    pos += sizeof(int);
+//    memcpy(buf+pos, (char*)&id, sizeof(uint8));
+//    pos += sizeof(uint8);
+//    memcpy(buf+pos, (char*)&processor, sizeof(uint8));
+//    pos += sizeof(uint8);
+//    int datasize;
+//    //strings that are passed can be of variable length, all other types are fixed length
+//    datasize = (eventTypes[type] == STR) ? strlen((char*)data) : getNativeType(eventTypes[type]).getSize();
+//    memcpy(buf+pos, (char*)data, datasize);
+    eventFullData[type]->writeCompoundData(1, 0, eventCompTypes[type], evptr);
+//    hb.free();
+    
+    
+    
+    
 }
 
-/*void KWEFile::addKwdFile(String filename)
-{
-	if (kwdIndex == 0)
-	{
-		CHECK_ERROR(setAttributeStr(filename + "/recordings/" + String(recordingNumber), "/recordings/" + String(recordingNumber) +
-			"/raw", "hdf5_path"));
-	}
-    CHECK_ERROR(setAttributeStr(filename + "/recordings/" + String(recordingNumber),"/recordings/" + String(recordingNumber) +
-                                "/raw/hdf5_paths",String(kwdIndex)));
-    kwdIndex++;
-}*/
 
 void AEFile::addEventType(String name, DataTypes type, String dataName)
-{
+{    
     eventNames.add(name);
     eventTypes.add(type);
-    eventDataNames.add(dataName);
+    eventDataNames.add(dataName);  
+    
+    size_t typesize = (type == STR) ? MAX_STR_SIZE : getNativeType(type).getSize();
+    size_t size = sizeof(uint64)+2*sizeof(uint8)+sizeof(int) + typesize;
+    eventSizes.add(size);
+    CompType ctype(size);
+    if (name == "Messages")
+    {         
+        ctype.insertMember(H5std_string("recording"), HOFFSET(MessageEvent, recording), PredType::NATIVE_INT32);
+        ctype.insertMember(H5std_string("eventID"), HOFFSET(MessageEvent, eventID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("nodeID"), HOFFSET(MessageEvent, nodeID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("Text"), HOFFSET(MessageEvent, text), getNativeType(type));        
+        eventCompTypes.add(ctype);
+    }
+    else if (name == "TTL")
+    {
+        ctype.insertMember(H5std_string("timestamp"), HOFFSET(TTLEvent, timestamp), PredType::NATIVE_UINT64);
+        ctype.insertMember(H5std_string("recording"), HOFFSET(TTLEvent, recording), PredType::NATIVE_INT32);
+        ctype.insertMember(H5std_string("eventID"), HOFFSET(TTLEvent, eventID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("nodeID"), HOFFSET(TTLEvent, nodeID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("event_channel"), HOFFSET(TTLEvent, event_channel), getNativeType(type));
+        eventCompTypes.add(ctype);      
+    }
+    else
+    {
+        std::cerr << "Event type" << name << "not implemented; look at ArfFileFormat.cpp";
+    }
+
+//Again, this is the nice idea for event types. Look at writeEvent.
+//    eventCompTypes.add(ctype);
+//
+//    size_t offset = 0;
+//    ctype.insertMember(H5std_string("timestamp"), offset, PredType::NATIVE_UINT64);
+//    offset += sizeof(uint64);
+//    ctype.insertMember(H5std_string("recording"), offset, PredType::NATIVE_INT32);
+//    offset += sizeof(int);
+//    ctype.insertMember(H5std_string("eventID"), offset, PredType::NATIVE_UINT8);
+//    offset += sizeof(uint8);
+//    ctype.insertMember(H5std_string("nodeID"), offset, PredType::NATIVE_UINT8);
+//    offset += sizeof(uint8);
+//    ctype.insertMember(H5std_string(dataName.toUTF8()), offset, getNativeType(type));
+//    eventCompTypes.add(ctype);
 }
 
 //KWX File
@@ -1005,6 +1112,14 @@ void AXFile::addChannelGroup(int nChannels)
 {
     channelArray.add(nChannels);
     numElectrodes++;
+    
+    //Create the compound datatype for that group
+    CompType spiketype(sizeof(SpikeInfo));
+    hsize_t dims[2] = {MAX_TRANSFORM_SIZE/(uint64)nChannels, (uint64)nChannels};
+    spiketype.insertMember(H5std_string("waveform"), HOFFSET(SpikeInfo, waveform), ArrayType(getNativeType(I16), 2, dims));
+    spiketype.insertMember(H5std_string("recording"), HOFFSET(SpikeInfo, recording), getNativeType(U16));
+    spiketype.insertMember(H5std_string("timestamp"), HOFFSET(SpikeInfo, timestamp), getNativeType(U64));
+    spikeCompTypes.add(spiketype);
 }
 
 int AXFile::createChannelGroup(int index)
@@ -1013,12 +1128,17 @@ int AXFile::createChannelGroup(int index)
     int nChannels = channelArray[index];
     String path("/channel_groups/"+String(index));
     CHECK_ERROR(createGroup(path));
-    dSet = createDataSet(I16,0,0,nChannels,SPIKE_CHUNK_XSIZE,SPIKE_CHUNK_YSIZE,path+"/waveforms_filtered");
-    if (!dSet) return -1;
-    dSet = createDataSet(U64,0,SPIKE_CHUNK_XSIZE,path+"/time_samples");
-    if (!dSet) return -1;
-    dSet = createDataSet(U16,0,SPIKE_CHUNK_XSIZE,path+"/recordings");
-    if (!dSet) return -1;
+//    dSet = createDataSet(I16,0,0,nChannels,SPIKE_CHUNK_XSIZE,SPIKE_CHUNK_YSIZE,path+"/waveforms_filtered");
+//    if (!dSet) return -1;
+//    dSet = createDataSet(U64,0,SPIKE_CHUNK_XSIZE,path+"/time_samples");
+//    if (!dSet) return -1;
+//    dSet = createDataSet(U16,0,SPIKE_CHUNK_XSIZE,path+"/recordings");
+//    if (!dSet) return -1;
+    
+    int max_dims[3] = {0, 0, 0}; //first dimension set to 0, because we want it unlimited
+    int chunk_dims[3] = {SPIKE_CHUNK_XSIZE, 0, 0};
+    dSet = createCompoundDataSet(spikeCompTypes[index], path+"/full_data", 1, max_dims, chunk_dims);
+    
     return 0;
 }
 
@@ -1031,26 +1151,31 @@ void AXFile::startNewRecording(int recordingNumber)
     for (int i=0; i < channelArray.size(); i++)
     {
         path = "/channel_groups/"+String(i);
-        dSet=getDataSet(path+"/waveforms_filtered");
-        if (!dSet)
-            std::cerr << "Error loading spikes dataset for group " << i << std::endl;
-        spikeArray.add(dSet);
-        dSet=getDataSet(path+"/time_samples");
-        if (!dSet)
-            std::cerr << "Error loading spike timestamp dataset for group " << i << std::endl;
-        timeStamps.add(dSet);
-        dSet=getDataSet(path+"/recordings");
-        if (!dSet)
-            std::cerr << "Error loading spike recordings dataset for group " << i << std::endl;
-        recordingArray.add(dSet);
+//        dSet=getDataSet(path+"/waveforms_filtered");
+//        if (!dSet)
+//            std::cerr << "Error loading spikes dataset for group " << i << std::endl;
+//        spikeArray.add(dSet);
+//        dSet=getDataSet(path+"/time_samples");
+//        if (!dSet)
+//            std::cerr << "Error loading spike timestamp dataset for group " << i << std::endl;
+//        timeStamps.add(dSet);
+//        dSet=getDataSet(path+"/recordings");
+//        if (!dSet)
+//            std::cerr << "Error loading spike recordings dataset for group " << i << std::endl;
+//        recordingArray.add(dSet);
+        
+        dSet = getDataSet(path+"/full_data");
+        spikeFullDataArray.add(dSet);
     }
 }
 
 void AXFile::stopRecording()
 {
-    spikeArray.clear();
-    timeStamps.clear();
-    recordingArray.clear();
+//    spikeArray.clear();
+//    timeStamps.clear();
+//    recordingArray.clear();
+    spikeFullDataArray.clear();
+    
 }
 
 void AXFile::resetChannels()
@@ -1067,7 +1192,17 @@ void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, uint64
         return;
     }
     int nChans= channelArray[groupIndex];
+    
+    if (nSamples > MAX_TRANSFORM_SIZE)
+    {
+        std::cerr << "Spike nSamples is bigger than MAX_TRANSFORM_SIZE/nChannels in group" << groupIndex << std::endl;
+    }
+    
+    spikeinfo.recording = recordingNumber;
+    spikeinfo.timestamp = timestamp;
+    
     int16* dst=transformVector;
+    int16* waveBuf = spikeinfo.waveform;
 
     //Given the way we store spike data, we need to transpose it to store in
     //N x NSAMPLES x NCHANNELS as well as convert from u16 to i16
@@ -1076,10 +1211,16 @@ void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, uint64
         for (int j = 0; j < nChans; j++)
         {
             *(dst++) = *(data+j*nSamples+i)-32768;
+            *(waveBuf++) = *(data+j*nSamples+i)-32768;
         }
     }
+    //Fill the rest of buffer with 0s, so that we don't write any junk. 
+    //TODO either validSamples parameter or resizable array
+    while(waveBuf < spikeinfo.waveform+MAX_TRANSFORM_SIZE) {*(waveBuf++) = 0;}
+    
+    spikeFullDataArray[groupIndex]->writeCompoundData(1, 0, spikeCompTypes[groupIndex], (void*)&spikeinfo);
 
-    CHECK_ERROR(spikeArray[groupIndex]->writeDataBlock(1,nSamples,I16,transformVector));
-    CHECK_ERROR(recordingArray[groupIndex]->writeDataBlock(1,I32,&recordingNumber));
-    CHECK_ERROR(timeStamps[groupIndex]->writeDataBlock(1,U64,&timestamp));
+//    CHECK_ERROR(spikeArray[groupIndex]->writeDataBlock(1,nSamples,I16,transformVector));
+//    CHECK_ERROR(recordingArray[groupIndex]->writeDataBlock(1,I32,&recordingNumber));
+//    CHECK_ERROR(timeStamps[groupIndex]->writeDataBlock(1,U64,&timestamp));
 }

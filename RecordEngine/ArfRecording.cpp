@@ -22,6 +22,8 @@
  */
 
 #include "ArfRecording.h"
+#include "../../../Processors/GenericProcessor/GenericProcessor.h"
+
 #define MAX_BUFFER_SIZE 40960
 #define CHANNEL_TIMESTAMP_PREALLOC_SIZE 128
 #define CHANNEL_TIMESTAMP_MIN_WRITE	32
@@ -32,7 +34,7 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
-    savingNum = 100000;
+    savingNum = 0;
     partNo = 0;
 }
 
@@ -180,11 +182,12 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
 }
 
 void ArfRecording::closeFiles()
-{
+{    
     eventFile->stopRecording();
     eventFile->close();
     spikesFile->stopRecording();
     spikesFile->close();
+    //TODO write all the remaining samples
     for (int i = 0; i < fileArray.size(); i++)
     {
         if (fileArray[i]->isOpen())
@@ -226,6 +229,7 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
             partBuffer[writeChannel]->add(*(buf+i));
         }
 
+        //TODO instead have a general "saving lock" for this, writeSpikes, writeEvents
         partBuffer.getLock().enter();
         bool ifSave = true;
         for (int i=0; i<getNumRecordedChannels();i++)
@@ -274,18 +278,7 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
 //			currentTS += TIMESTAMP_EACH_NSAMPLES;
 //		}
 //	}
-//	channelLeftOverSamples.set(writeChannel, (size + sampleOffset) % TIMESTAMP_EACH_NSAMPLES);
-//    if (savingPeriod != 0) {
-//        int64 curTime = Time::currentTimeMillis();
-//        if (curTime - lastSaveTime > savingPeriod)
-//        {
-//            partNo++;
-//            this->closeFiles();
-//            this->openFiles(rootFolder,experimentNumber,recordingNumber, partNo);
-//            lastSaveTime = Time::currentTimeMillis();        
-//        }        
-//    }
-    
+//	channelLeftOverSamples.set(writeChannel, (size + sampleOffset) % TIMESTAMP_EACH_NSAMPLES);   
 }
 
 void ArfRecording::endChannelBlock(bool lastBlock)
