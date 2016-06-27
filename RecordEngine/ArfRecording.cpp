@@ -34,7 +34,7 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
-    savingNum = 20000;
+    savingNum = 10000;
     cntPerPart = 20;
     partNo = 0;
     partCnt = 0;
@@ -189,7 +189,7 @@ void ArfRecording::closeFiles()
     eventFile->close();
     spikesFile->stopRecording();
     spikesFile->close();
-    //TODO write all the remaining samples
+    //TODO There are some unsaved samples in partBuf. However, only savingNum of them at most.
     for (int i = 0; i < fileArray.size(); i++)
     {
         if (fileArray[i]->isOpen())

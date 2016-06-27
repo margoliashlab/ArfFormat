@@ -1182,12 +1182,12 @@ int AXFile::createChannelGroup(int index)
     ScopedPointer<ArfRecordingData> dSet;
     int nChannels = channelArray[index];
     String path("/channel_groups/"+String(index));
-    CHECK_ERROR(createGroup(path));
+    //CHECK_ERROR(createGroup(path));
     
     int max_dims[3] = {0, 0, 0}; //first dimension set to 0, because we want it unlimited
     int chunk_dims[3] = {SPIKE_CHUNK_XSIZE, 0, 0};
-    dSet = createCompoundDataSet(spikeCompTypes[index], path+"/data", 1, max_dims, chunk_dims);
-    CHECK_ERROR(setAttributeStr(String("samples"), path+"/data", String("units")));
+    dSet = createCompoundDataSet(spikeCompTypes[index], path, 1, max_dims, chunk_dims);
+    CHECK_ERROR(setAttributeStr(String("samples"), path, String("units")));
     
     return 0;
 }
@@ -1202,7 +1202,7 @@ void AXFile::startNewRecording(int recordingNumber)
     {
         path = "/channel_groups/"+String(i);
         
-        dSet = getDataSet(path+"/data");
+        dSet = getDataSet(path);
         spikeFullDataArray.add(dSet);
     }
 }
