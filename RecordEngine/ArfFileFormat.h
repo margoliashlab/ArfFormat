@@ -249,6 +249,7 @@ private:
         float time;
         int recording;
         int16 waveform[MAX_TRANSFORM_SIZE];
+        int samples;
     } SpikeInfo;
     Array<H5::CompType> spikeCompTypes;
     SpikeInfo spikeinfo;
