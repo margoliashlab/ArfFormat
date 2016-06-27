@@ -312,7 +312,9 @@ void ArfRecording::addSpikeElectrode(int index, const SpikeRecordInfo* elec)
 }
 void ArfRecording::writeSpike(int electrodeIndex, const SpikeObject& spike, int64 /*timestamp*/)
 {
-    spikesFile->writeSpike(electrodeIndex,spike.nSamples,spike.data,spike.timestamp);
+//    std::cout << spike.samplingFrequencyHz << spike.timestamp <<  std::endl;
+    float time = (float)spike.timestamp / spike.samplingFrequencyHz;
+    spikesFile->writeSpike(electrodeIndex,spike.nSamples,spike.data,time);
 }
 
 void ArfRecording::startAcquisition()

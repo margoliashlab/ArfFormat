@@ -182,14 +182,14 @@ protected:
 
 private:
     typedef struct MessageEvent {
-        uint64 timestamp;
+        float time;
         int32 recording;
         uint8 eventID;
         uint8 nodeID;
         char text[MAX_STR_SIZE];        
     } MessageEvent;
     typedef struct TTLEvent {
-        uint64 timestamp;
+        float time;
         int32 recording;
         uint8 eventID;
         uint8 nodeID;
@@ -197,6 +197,7 @@ private:
     } TTLEvent;
    
     int recordingNumber;
+    float sample_rate;
     String filename;
     
     OwnedArray<ArfRecordingData> eventFullData;
@@ -223,7 +224,7 @@ public:
     void stopRecording();
     void addChannelGroup(int nChannels);
     void resetChannels();
-    void writeSpike(int groupIndex, int nSamples, const uint16* data, uint64 timestamp);
+    void writeSpike(int groupIndex, int nSamples, const uint16* data, float time);
     String getFileName();
 
 protected:
@@ -245,7 +246,7 @@ private:
     //int16* transformVector;
     
     typedef struct SpikeInfo {
-        uint64 timestamp;
+        float time;
         int recording;
         int16 waveform[MAX_TRANSFORM_SIZE];
     } SpikeInfo;

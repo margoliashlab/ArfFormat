@@ -990,6 +990,7 @@ int AEFile::createFileStructure()
 void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
 {
     this->recordingNumber = recordingNumber;
+    this->sample_rate = info->sample_rate;
     kwdIndex=0;
     String recordPath = String("/recordings/")+String(recordingNumber);
     for (int i = 0; i < eventNames.size(); i++)
@@ -1023,9 +1024,11 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
     TTLEvent evt;
     void* evptr;
 
+    float time = timestamp / sample_rate;
+
     if (eventNames[type] == "Messages")
     {
-        evm.timestamp = timestamp;
+        evm.time = time;
         evm.recording = recordingNumber;
         evm.eventID = id;
         evm.nodeID = processor;
@@ -1035,7 +1038,7 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
     }
     else if (eventNames[type] == "TTL")
     {
-        evt.timestamp = timestamp;
+        evt.time = time;
         evt.recording = recordingNumber;
         evt.eventID = id;
         evt.nodeID = processor;
@@ -1075,11 +1078,12 @@ void AEFile::addEventType(String name, DataTypes type, String dataName)
     eventDataNames.add(dataName);  
     
     size_t typesize = (type == STR) ? MAX_STR_SIZE : getNativeType(type).getSize();
-    size_t size = sizeof(uint64)+2*sizeof(uint8)+sizeof(int) + typesize;
+    size_t size = 2*sizeof(uint8)+sizeof(int) + sizeof(float) + typesize;
     eventSizes.add(size);
     CompType ctype(size);
     if (name == "Messages")
     {         
+        ctype.insertMember(H5std_string("start"), HOFFSET(MessageEvent, time), PredType::NATIVE_FLOAT);
         ctype.insertMember(H5std_string("recording"), HOFFSET(MessageEvent, recording), PredType::NATIVE_INT32);
         ctype.insertMember(H5std_string("eventID"), HOFFSET(MessageEvent, eventID), PredType::NATIVE_UINT8);
         ctype.insertMember(H5std_string("nodeID"), HOFFSET(MessageEvent, nodeID), PredType::NATIVE_UINT8);
@@ -1088,7 +1092,7 @@ void AEFile::addEventType(String name, DataTypes type, String dataName)
     }
     else if (name == "TTL")
     {
-        ctype.insertMember(H5std_string("timestamp"), HOFFSET(TTLEvent, timestamp), PredType::NATIVE_UINT64);
+        ctype.insertMember(H5std_string("start"), HOFFSET(TTLEvent, time), PredType::NATIVE_FLOAT);
         ctype.insertMember(H5std_string("recording"), HOFFSET(TTLEvent, recording), PredType::NATIVE_INT32);
         ctype.insertMember(H5std_string("eventID"), HOFFSET(TTLEvent, eventID), PredType::NATIVE_UINT8);
         ctype.insertMember(H5std_string("nodeID"), HOFFSET(TTLEvent, nodeID), PredType::NATIVE_UINT8);
@@ -1172,7 +1176,7 @@ void AXFile::addChannelGroup(int nChannels)
     hsize_t dims[2] = {MAX_TRANSFORM_SIZE/(uint64)nChannels, (uint64)nChannels};
     spiketype.insertMember(H5std_string("waveform"), HOFFSET(SpikeInfo, waveform), ArrayType(getNativeType(I16), 2, dims));
     spiketype.insertMember(H5std_string("recording"), HOFFSET(SpikeInfo, recording), getNativeType(U16));
-    spiketype.insertMember(H5std_string("timestamp"), HOFFSET(SpikeInfo, timestamp), getNativeType(U64));
+    spiketype.insertMember(H5std_string("start"), HOFFSET(SpikeInfo, time), PredType::NATIVE_FLOAT);
     spikeCompTypes.add(spiketype);
 }
 
@@ -1239,7 +1243,7 @@ void AXFile::resetChannels()
     channelArray.clear();
 }
 
-void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, uint64 timestamp)
+void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, float time)
 {
     if ((groupIndex < 0) || (groupIndex >= numElectrodes))
     {
@@ -1254,7 +1258,7 @@ void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, uint64
     }
     
     spikeinfo.recording = recordingNumber;
-    spikeinfo.timestamp = timestamp;
+    spikeinfo.time = time;
     
     int16* dst=transformVector;
     int16* waveBuf = spikeinfo.waveform;
