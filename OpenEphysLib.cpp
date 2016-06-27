@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <PluginInfo.h>
 #include "RecordEngine/ArfRecording.h"
-#include "FileSource/ArfFileSource.h"
+//#include "FileSource/ArfFileSource.h"
 #include <string>
 #ifdef WIN32
 #include <Windows.h>
@@ -34,7 +34,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 using namespace Plugin;
-#define NUM_PLUGINS 2
+//#define NUM_PLUGINS 2
+#define NUM_PLUGINS 1
 
 extern "C" EXPORT void getLibInfo(Plugin::LibraryInfo* info)
 {
@@ -53,11 +54,11 @@ extern "C" EXPORT int getPluginInfo(int index, Plugin::PluginInfo* info)
 		info->recordEngine.name = "Arf";
 		info->recordEngine.creator = &(Plugin::createRecordEngine<ArfRecording>);
 		break;
-	case 1:
-		info->type = Plugin::FileSourcePlugin;
-		info->fileSource.name = "Arf file";
-		info->fileSource.extensions = "arf";
-		info->fileSource.creator = &(Plugin::createFileSource<ArfFileSource>);
+//	case 1:
+//		info->type = Plugin::FileSourcePlugin;
+//		info->fileSource.name = "Arf file";
+//		info->fileSource.extensions = "arf";
+//		info->fileSource.creator = &(Plugin::createFileSource<ArfFileSource>);
 		break;
 	default:
 		return -1;

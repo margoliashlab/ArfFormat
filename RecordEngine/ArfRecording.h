@@ -71,6 +71,10 @@ private:
     int savingNum;
     OwnedArray<Array<int16>> partBuffer;
     int partNo;
+    int partCnt;
+    int cntPerPart;
+    CriticalSection partLock;
+    
     File rootFolder;
     int experimentNumber;
     int recordingNumber;

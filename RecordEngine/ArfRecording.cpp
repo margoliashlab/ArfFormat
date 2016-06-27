@@ -34,8 +34,10 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
-    savingNum = 0;
+    savingNum = 20000;
+    cntPerPart = 20;
     partNo = 0;
+    partCnt = 0;
 }
 
 ArfRecording::~ArfRecording()
@@ -239,12 +241,16 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
         }
         if (ifSave) 
         {
-            //Prevent the last part file being empty
-            if (partNo != 0) {
+            if (partCnt >= cntPerPart) {
+                //This lock is also in writeEvent, writeSpike.
+                //Should prevent from trying to write one of those when we are opening the next part.
+                ScopedLock sl(partLock);
+                partNo++;
                 this->closeFiles();
                 this->openFiles(rootFolder, experimentNumber, recordingNumber);
+                partCnt = 0;
             }
-            partNo++;
+            partCnt++;
         
             for (int i=0; i<getNumRecordedChannels();i++)
             {
@@ -299,6 +305,7 @@ void ArfRecording::endChannelBlock(bool lastBlock)
 
 void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 timestamp)
 {
+    ScopedLock sl(partLock);
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)
         eventFile->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),timestamp);
@@ -312,6 +319,7 @@ void ArfRecording::addSpikeElectrode(int index, const SpikeRecordInfo* elec)
 }
 void ArfRecording::writeSpike(int electrodeIndex, const SpikeObject& spike, int64 /*timestamp*/)
 {
+    ScopedLock sl(partLock);
     float time = (float)spike.timestamp / spike.samplingFrequencyHz;
     spikesFile->writeSpike(electrodeIndex,spike.nSamples,spike.data,time);
 }
