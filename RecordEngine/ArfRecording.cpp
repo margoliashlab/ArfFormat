@@ -35,7 +35,7 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
     savingNum = 10000;
-    cntPerPart = 20;
+    cntPerPart = 1000;
     partNo = 0;
     partCnt = 0;
 }
@@ -83,6 +83,12 @@ void ArfRecording::resetChannels()
 	channelTimestampArray.clear();
     if (spikesFile)
         spikesFile->resetChannels();
+    for (int i=0; i<partBuffer.size(); i++) 
+    {
+        partBuffer[i]->clear();
+    }
+    partNo = 0;
+    partCnt = 0;
 }
 
 void ArfRecording::addChannel(int index,const Channel* chan)
@@ -189,7 +195,7 @@ void ArfRecording::closeFiles()
     eventFile->close();
     spikesFile->stopRecording();
     spikesFile->close();
-    //TODO There are some unsaved samples in partBuf. However, only savingNum of them at most.
+    //TODO There are some unsaved samples in partBuf when we stop recording. However, only savingNum of them at most.
     for (int i = 0; i < fileArray.size(); i++)
     {
         if (fileArray[i]->isOpen())
@@ -232,7 +238,7 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
         }
 
         //TODO instead have a general "saving lock" for this, writeSpikes, writeEvents
-        partBuffer.getLock().enter();
+        const ScopedLock al(partBuffer.getLock());
         bool ifSave = true;
         for (int i=0; i<getNumRecordedChannels();i++)
         {
@@ -260,7 +266,6 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
                 partBuffer[i]->removeRange(0, savingNum);            
             }                    
         }
-        partBuffer.getLock().exit();
     }
     else { //saving to one file
         fileArray[index]->writeChannel(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);

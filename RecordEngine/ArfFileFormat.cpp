@@ -1184,7 +1184,7 @@ int AXFile::createChannelGroup(int index)
     String path("/channel_groups/"+String(index));
     //CHECK_ERROR(createGroup(path));
     
-    int max_dims[3] = {0, 0, 0}; //first dimension set to 0, because we want it unlimited
+    int max_dims[3] = {0, 0, 0}; //first dimension set to 0, because we want it unlimited (look at createCompoundDataSet)
     int chunk_dims[3] = {SPIKE_CHUNK_XSIZE, 0, 0};
     dSet = createCompoundDataSet(spikeCompTypes[index], path, 1, max_dims, chunk_dims);
     CHECK_ERROR(setAttributeStr(String("samples"), path, String("units")));

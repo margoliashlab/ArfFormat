@@ -69,7 +69,7 @@ private:
     
 
     int savingNum;
-    OwnedArray<Array<int16>> partBuffer;
+    OwnedArray<Array<int16>, CriticalSection> partBuffer;
     int partNo;
     int partCnt;
     int cntPerPart;
