@@ -1,8 +1,8 @@
 /*
  ------------------------------------------------------------------
 
- This file is part of the Open Ephys GUI
- Copyright (C) 2014 Florian Franzen
+ Michal Badura, 2016
+ based on code by Florian Franzen, 2014
 
  ------------------------------------------------------------------
 
@@ -172,7 +172,6 @@ public:
     void startNewRecording(int recordingNumber, ArfRecordingInfo* info);
     void stopRecording();
     void writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp);
-  //  void addKwdFile(String filename);
     void addEventType(String name, DataTypes type, String dataName);
     String getFileName();
 
@@ -243,7 +242,6 @@ private:
     Array<int> channelArray;
     int numElectrodes;
 	HeapBlock<int16> transformVector;
-    //int16* transformVector;
     
     typedef struct SpikeInfo {
         float time;

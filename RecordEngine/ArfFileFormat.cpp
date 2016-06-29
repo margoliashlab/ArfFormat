@@ -1,9 +1,8 @@
 /*
  ------------------------------------------------------------------
 
- This file is part of the Open Ephys GUI
- Copyright (C) 2014 Florian Franzen
-
+ Michal Badura, 2016
+ based on code by Florian Franzen, 2014
  ------------------------------------------------------------------
 
  This program is free software: you can redistribute it and/or modify
@@ -104,7 +103,6 @@ int ArfFileBase::open(bool newfile, int nChans)
 		if (nChans > 0)
 		{
 			props.setCache(0, 1667, 2 * 8 * 2 * CHUNK_XSIZE * nChans, 1);
-			//std::cout << "opening HDF5 " << getFileName() << " with nchans: " << nChans << std::endl;
 		}
 
         if (newfile) accFlags = H5F_ACC_TRUNC;
@@ -812,7 +810,7 @@ void ArfRecordingData::getRowXPositions(Array<uint32>& rows)
     rows.addArray(rowXPos);
 }
 
-//KWD File
+//Continuous File
 
 ArfFile::ArfFile(int processorNumber, String basename) : ArfFileBase()
 {
@@ -872,21 +870,11 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
         int64 datatype = 0;
         CHECK_ERROR(setAttribute(I64,&datatype,channelPath, String("datatype")));
     }
-//TODO get rid of timestamps
-//	tsData = createDataSet(I64, 0, nChannels, TIMESTAMP_CHUNK_SIZE, recordPath + "/timestamps");
-//	if (!tsData.get())
-//		std::cerr << "Error creating timestamps data set" << std::endl;
-
     curChan = nChannels;
 }
 
 void ArfFile::stopRecording()
 {
-    Array<uint32> samples;
-//    String path = String("/recordings/")+String(recordingNumber)+String("/data");
-//    recdata->getRowXPositions(samples);
-
-//    CHECK_ERROR(setAttributeArray(U32,samples.getRawDataPointer(),samples.size(),path,"valid_samples"));
     //ScopedPointer does the deletion and destructors the closings
     recdata = nullptr;
     recarr.clear();
@@ -988,7 +976,6 @@ void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
     this->recordingNumber = recordingNumber;
     this->sample_rate = info->sample_rate;
     kwdIndex=0;
-//    String recordPath = String("/recordings/")+String(recordingNumber);
     for (int i = 0; i < eventNames.size(); i++)
     {
         ArfRecordingData* dSet;
@@ -1041,25 +1028,8 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
         evt.event_channel = *((uint8*)data);
         evptr = (void*)&evt;
     }    
-    //Perhaps this could work? Particularly useful if there are more different event types, otherwise whatever.
-    //fill a buffer that pretends to be a struct for CompType
-//    HeapBlock<char> hb(eventSizes[type]);
-//    char* buf = hb.getData();
-//    int pos = 0;
-//    memcpy(buf, (char*)&timestamp, sizeof(uint64));
-//    pos += sizeof(uint64);
-//    memcpy(buf+pos, (char*)&recordingNumber, sizeof(int));
-//    pos += sizeof(int);
-//    memcpy(buf+pos, (char*)&id, sizeof(uint8));
-//    pos += sizeof(uint8);
-//    memcpy(buf+pos, (char*)&processor, sizeof(uint8));
-//    pos += sizeof(uint8);
-//    int datasize;
-//    //strings that are passed can be of variable length, all other types are fixed length
-//    datasize = (eventTypes[type] == STR) ? strlen((char*)data) : getNativeType(eventTypes[type]).getSize();
-//    memcpy(buf+pos, (char*)data, datasize);
+
     eventFullData[type]->writeCompoundData(1, 0, eventCompTypes[type], evptr);
-//    hb.free();
     
     
     
@@ -1099,21 +1069,6 @@ void AEFile::addEventType(String name, DataTypes type, String dataName)
     {
         std::cerr << "Event type" << name << "not implemented; look at ArfFileFormat.cpp";
     }
-
-//Again, this is the nice idea for event types. Look at writeEvent.
-//    eventCompTypes.add(ctype);
-//
-//    size_t offset = 0;
-//    ctype.insertMember(H5std_string("timestamp"), offset, PredType::NATIVE_UINT64);
-//    offset += sizeof(uint64);
-//    ctype.insertMember(H5std_string("recording"), offset, PredType::NATIVE_INT32);
-//    offset += sizeof(int);
-//    ctype.insertMember(H5std_string("eventID"), offset, PredType::NATIVE_UINT8);
-//    offset += sizeof(uint8);
-//    ctype.insertMember(H5std_string("nodeID"), offset, PredType::NATIVE_UINT8);
-//    offset += sizeof(uint8);
-//    ctype.insertMember(H5std_string(dataName.toUTF8()), offset, getNativeType(type));
-//    eventCompTypes.add(ctype);
 }
 
 //Spikes file
