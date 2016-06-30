@@ -1,8 +1,8 @@
 /*
  ------------------------------------------------------------------
 
- This file is part of the Open Ephys GUI
- Copyright (C) 2014 Florian Franzen
+ Michal Badura, 2016
+ based on code by Florian Franzen, 2014
 
  ------------------------------------------------------------------
 
@@ -34,8 +34,10 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
-    savingNum = 0;
+    savingNum = 10000;
+    cntPerPart = 1000;
     partNo = 0;
+    partCnt = 0;
 }
 
 ArfRecording::~ArfRecording()
@@ -81,6 +83,12 @@ void ArfRecording::resetChannels()
 	channelTimestampArray.clear();
     if (spikesFile)
         spikesFile->resetChannels();
+    for (int i=0; i<partBuffer.size(); i++) 
+    {
+        partBuffer[i]->clear();
+    }
+    partNo = 0;
+    partCnt = 0;
 }
 
 void ArfRecording::addChannel(int index,const Channel* chan)
@@ -100,11 +108,9 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
         std::cout << "Opening part" << partNo << std::endl;
     }
     String basepath = rootFolder.getFullPathName() + rootFolder.separatorString + "experiment" + String(experimentNumber) + partName;
-    //KWE file
     eventFile->initFile(basepath);
     eventFile->open();
 
-    //KWX file
     spikesFile->initFile(basepath);
     spikesFile->open();
     spikesFile->startNewRecording(recordingNumber);
@@ -112,16 +118,11 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
     //Let's just put the first processor (usually the source node) on the KWIK for now
     infoArray[0]->name = String("Open Ephys Recording #") + String(recordingNumber);
 
-   /* if (hasAcquired)
-        infoArray[0]->start_time = (*timestamps)[getChannel(0)->sourceNodeId]; //(*timestamps).begin()->first;
-    else
-        infoArray[0]->start_time = 0;*/
 	infoArray[0]->start_time = getTimestamp(0);
 
     infoArray[0]->start_sample = 0;
     eventFile->startNewRecording(recordingNumber,infoArray[0]);
 
-    //KWD files
 	recordedChanToKWDChan.clear();
 	Array<int> processorRecPos;
 	processorRecPos.insertMultiple(0, 0, fileArray.size());
@@ -159,11 +160,8 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
 		}
         if (fileArray[i]->isOpen())
         {
-           // File f(fileArray[i]->getFileName());
-           // eventFile->addKwdFile(f.getFileName());
 
             infoArray[i]->name = String("Open Ephys Recording #") + String(recordingNumber);
-            //           infoArray[i]->start_time = timestamp;
             infoArray[i]->start_sample = 0;
             infoArray[i]->bitVolts.clear();
             infoArray[i]->bitVolts.addArray(*bitVoltsArray[i]);
@@ -187,7 +185,7 @@ void ArfRecording::closeFiles()
     eventFile->close();
     spikesFile->stopRecording();
     spikesFile->close();
-    //TODO write all the remaining samples
+    //TODO There are some unsaved samples in partBuf when we stop recording. However, only savingNum of them at most.
     for (int i = 0; i < fileArray.size(); i++)
     {
         if (fileArray[i]->isOpen())
@@ -229,8 +227,7 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
             partBuffer[writeChannel]->add(*(buf+i));
         }
 
-        //TODO instead have a general "saving lock" for this, writeSpikes, writeEvents
-        partBuffer.getLock().enter();
+        const ScopedLock al(partBuffer.getLock());
         bool ifSave = true;
         for (int i=0; i<getNumRecordedChannels();i++)
         {
@@ -239,12 +236,16 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
         }
         if (ifSave) 
         {
-            //Prevent the last part file being empty
-            if (partNo != 0) {
+            if (partCnt >= cntPerPart) {
+                //This lock is also in writeEvent, writeSpike.
+                //Should prevent from trying to write one of those when we are opening the next part.
+                ScopedLock sl(partLock);
+                partNo++;
                 this->closeFiles();
                 this->openFiles(rootFolder, experimentNumber, recordingNumber);
+                partCnt = 0;
             }
-            partNo++;
+            partCnt++;
         
             for (int i=0; i<getNumRecordedChannels();i++)
             {
@@ -254,51 +255,21 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
                 partBuffer[i]->removeRange(0, savingNum);            
             }                    
         }
-        partBuffer.getLock().exit();
     }
     else { //saving to one file
         fileArray[index]->writeChannel(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
     }
 
-//	int sampleOffset = channelLeftOverSamples[writeChannel];
-//	int blockStart = sampleOffset;
-//	int64 currentTS = getTimestamp(writeChannel);
-//
-//	if (sampleOffset > 0)
-//	{
-//		currentTS += TIMESTAMP_EACH_NSAMPLES - sampleOffset;
-//		blockStart += TIMESTAMP_EACH_NSAMPLES - sampleOffset;
-//	}
-//	
-//	for (int i = 0; i < size; i += TIMESTAMP_EACH_NSAMPLES)
-//	{
-//		if ((blockStart + i) < (sampleOffset + size))
-//		{
-//			channelTimestampArray[writeChannel]->add(currentTS);
-//			currentTS += TIMESTAMP_EACH_NSAMPLES;
-//		}
-//	}
-//	channelLeftOverSamples.set(writeChannel, (size + sampleOffset) % TIMESTAMP_EACH_NSAMPLES);   
 }
 
 void ArfRecording::endChannelBlock(bool lastBlock)
 {
-//	int nCh = channelTimestampArray.size();
-//	for (int ch = 0; ch < nCh; ++ch)
-//	{
-//		int tsSize = channelTimestampArray[ch]->size();
-//		if ((tsSize > 0) && ((tsSize > CHANNEL_TIMESTAMP_MIN_WRITE) || lastBlock))
-//		{
-//			int realChan = getRealChannel(ch);
-//			int index = processorMap[getChannel(realChan)->recordIndex];
-//			fileArray[index]->writeTimestamps(channelTimestampArray[ch]->getRawDataPointer(), tsSize, recordedChanToKWDChan[ch]);
-//			channelTimestampArray[ch]->clearQuick();
-//		}
-//	}
+
 }
 
 void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 timestamp)
 {
+    ScopedLock sl(partLock);
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)
         eventFile->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),timestamp);
@@ -312,6 +283,7 @@ void ArfRecording::addSpikeElectrode(int index, const SpikeRecordInfo* elec)
 }
 void ArfRecording::writeSpike(int electrodeIndex, const SpikeObject& spike, int64 /*timestamp*/)
 {
+    ScopedLock sl(partLock);
     float time = (float)spike.timestamp / spike.samplingFrequencyHz;
     spikesFile->writeSpike(electrodeIndex,spike.nSamples,spike.data,time);
 }

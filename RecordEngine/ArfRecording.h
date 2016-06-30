@@ -1,8 +1,8 @@
 /*
  ------------------------------------------------------------------
 
- This file is part of the Open Ephys GUI
- Copyright (C) 2014 Florian Franzen
+ Michal Badura, 2016
+ based on code by Florian Franzen, 2014
 
  ------------------------------------------------------------------
 
@@ -63,14 +63,15 @@ private:
     ScopedPointer<AXFile> spikesFile;
 	HeapBlock<float> scaledBuffer;
 	HeapBlock<int16> intBuffer;
-	int bufferSize;
-    //float* scaledBuffer;
-    //int16* intBuffer;
-    
+	int bufferSize;    
 
     int savingNum;
-    OwnedArray<Array<int16>> partBuffer;
+    OwnedArray<Array<int16>, CriticalSection> partBuffer;
     int partNo;
+    int partCnt;
+    int cntPerPart;
+    CriticalSection partLock;
+    
     File rootFolder;
     int experimentNumber;
     int recordingNumber;
