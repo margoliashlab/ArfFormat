@@ -67,13 +67,16 @@ public:
     static H5::DataType getNativeType(DataTypes type);
     static H5::DataType getH5Type(DataTypes type);
     
+    //moved from protected to be able to set attributes through messages
+    int setAttributeStr(String value, String path, String name);
+    
     
 protected:
 
     virtual int createFileStructure() = 0;
 
     int setAttribute(DataTypes type, void* data, String path, String name);
-    int setAttributeStr(String value, String path, String name);
+    
     int setAttributeAsArray(DataTypes type, void* data, int size, String path, String name);
     int setAttributeArray(DataTypes type, void* data, int size, String path, String name);
     int createGroup(String path);

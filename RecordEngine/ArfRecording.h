@@ -49,6 +49,8 @@ public:
 private:
 
     int processorIndex;
+    
+    void processSpecialEvent(String msg);
 
     Array<int> processorMap;
 	Array<int> channelsPerProcessor;

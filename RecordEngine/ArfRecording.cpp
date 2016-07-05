@@ -269,12 +269,48 @@ void ArfRecording::endChannelBlock(bool lastBlock)
 
 void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 timestamp)
 {
+    //TODO makes no sense to lock before processing special message
     ScopedLock sl(partLock);
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)
+    {
         eventFile->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),timestamp);
+    }
+        
     else if (eventType == GenericProcessor::MESSAGE)
-        eventFile->writeEvent(1,*(dataptr+2),*(dataptr+1),(void*)(dataptr+6),timestamp);
+    {
+        String msg = String((char*)(dataptr+6));
+        if (msg.startsWith("ARF"))
+        {
+            processSpecialEvent(msg);
+            //TODO add messages with that override the timestamp
+            //but that requires knowing the actual recording start time
+        }
+        else
+        {
+            eventFile->writeEvent(1,*(dataptr+2),*(dataptr+1),(void*)(dataptr+6),timestamp);
+        
+        }
+    }
+}
+
+void ArfRecording::processSpecialEvent(String msg)
+{
+    StringArray words = StringArray();
+    words.addTokens(msg, " ", "\"");
+    //TODO probably better to set attributes of files in fileArray?
+    std::cout << words[1] << std::endl;
+    if (words[1].compare("SetAttr"))
+    {
+        eventFile->setAttributeStr(words[3], "/event_types", words[2]);        
+    }
+    else if(words[1].compare("TS"))
+    {
+        int64 ts = words[2].getLargeIntValue();
+        String msg = words[3];
+        std::cout << ts << msg << std::endl;
+    }
+    
 }
 
 void ArfRecording::addSpikeElectrode(int index, const SpikeRecordInfo* elec)
