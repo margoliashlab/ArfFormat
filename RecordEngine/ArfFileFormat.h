@@ -150,6 +150,11 @@ public:
     void writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp);
     void addEventType(String name, DataTypes type, String dataName);
     
+    //For spikes
+    void addChannelGroup(int nChannels);
+    void resetChannels();
+    void writeSpike(int groupIndex, int nSamples, const uint16* data, float time);
+    
 
 protected:
     int createFileStructure();
@@ -194,37 +199,11 @@ private:
     
     int kwdIndex;
     
-    
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArfFile);
-};
-
-
-class AXFile : public ArfFileBase
-{
-public:
-    AXFile(String basename);
-    AXFile();
-    virtual ~AXFile();
-    void initFile(String basename);
-    void startNewRecording(int recordingNumber);
-    void stopRecording();
-    void addChannelGroup(int nChannels);
-    void resetChannels();
-    void writeSpike(int groupIndex, int nSamples, const uint16* data, float time);
-    String getFileName();
-
-protected:
-    int createFileStructure();
-
-private:
+    //For spikes
     int createChannelGroup(int index);
-    int recordingNumber;
-    String filename;
     OwnedArray<ArfRecordingData> spikeArray;
     OwnedArray<ArfRecordingData> recordingArray;
     OwnedArray<ArfRecordingData> timeStamps;
-    
     OwnedArray<ArfRecordingData> spikeFullDataArray;
     
     Array<int> channelArray;
@@ -241,7 +220,7 @@ private:
     SpikeInfo spikeinfo;
     
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AXFile);
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArfFile);
 };
 
 #endif  // ARFFILEFORMAT_H_INCLUDED
