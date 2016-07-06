@@ -137,7 +137,7 @@ public:
     ArfFile();
     virtual ~ArfFile();
     void initFile(int processorNumber, String basename);
-    void startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info);
+    void startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info, Array<int> recordedChanToKWDChan, Array<int> procMap);
     void stopRecording();
     void writeBlockData(int16* data, int nSamples);
     void writeRowData(int16* data, int nSamples);

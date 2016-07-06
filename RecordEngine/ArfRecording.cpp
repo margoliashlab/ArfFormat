@@ -34,7 +34,7 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
-    savingNum = 10000;
+    savingNum = 0;
     cntPerPart = 1000;
     partNo = 0;
     partCnt = 0;
@@ -123,55 +123,40 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
 	recordedChanToKWDChan.clear();
 	Array<int> processorRecPos;
 	processorRecPos.insertMultiple(0, 0, fileArray.size());
-	for (int i = 0; i < getNumRecordedChannels(); i++)
+	
+    mainInfo = new ArfRecordingInfo();
+    mainFile = new ArfFile();
+    mainFile->initFile(0, basepath);
+    mainInfo->start_time = getTimestamp(0);    
+    for (int i = 0; i < getNumRecordedChannels(); i++)
 	{
-		int index = processorMap[getRealChannel(i)];
-		ArfFile* newFile = new ArfFile;
-        fileArray.set(index, newFile);
-        if (!fileArray[index]->isOpen())
-		{
-			fileArray[index]->initFile(getChannel(getRealChannel(i))->nodeId, basepath);
-			infoArray[index]->start_time = getTimestamp(i);
-		}
+        bitVolts.add(getChannel(getRealChannel(i))->bitVolts);
+        sampleRates.add(getChannel(getRealChannel(i))->sampleRate);
+        procMap.add(getChannel(getRealChannel(i))->nodeId);
 
-		channelsPerProcessor.set(index, channelsPerProcessor[index] + 1);
-		bitVoltsArray[index]->add(getChannel(getRealChannel(i))->bitVolts);
-		sampleRatesArray[index]->add(getChannel(getRealChannel(i))->sampleRate);
-		if (getChannel(getRealChannel(i))->sampleRate != infoArray[index]->sample_rate)
-		{
-			infoArray[index]->multiSample = true;
-		}
-		int procPos = processorRecPos[index];
+		int procPos = processorRecPos[processorMap[getRealChannel(i)]];
 		recordedChanToKWDChan.add(procPos);
-		processorRecPos.set(index, procPos+1);
+		processorRecPos.set(processorMap[getRealChannel(i)], procPos+1);
 		channelTimestampArray.add(new Array<int64>);
 		channelTimestampArray.getLast()->ensureStorageAllocated(CHANNEL_TIMESTAMP_PREALLOC_SIZE);
 		channelLeftOverSamples.add(0);
-	} 
+	}
+    
+    mainFile->open(getNumRecordedChannels());
+    
+    mainInfo->name = String("Open Ephys Recording #") + String(recordingNumber);
+    mainInfo->start_sample = 0;
+    mainInfo->bitVolts.clear();
+    mainInfo->bitVolts.addArray(bitVolts);
+    mainInfo->channelSampleRates.clear();
+    mainInfo->channelSampleRates.addArray(sampleRates);
+        
+    mainFile->addEventType("TTL",ArfFileBase::U8,"event_channels");
+    mainFile->addEventType("Messages",ArfFileBase::STR,"Text");
+    
 
-    for (int i = 0; i < fileArray.size(); i++)
-    {
-		if ((!fileArray[i]->isOpen()) && (fileArray[i]->isReadyToOpen()))
-		{
-			fileArray[i]->open(channelsPerProcessor[i]);
-		}
-        if (fileArray[i]->isOpen())
-        {
-
-            infoArray[i]->name = String("Open Ephys Recording #") + String(recordingNumber);
-            infoArray[i]->start_sample = 0;
-            infoArray[i]->bitVolts.clear();
-            infoArray[i]->bitVolts.addArray(*bitVoltsArray[i]);
-            infoArray[i]->channelSampleRates.clear();
-            infoArray[i]->channelSampleRates.addArray(*sampleRatesArray[i]);
             
-            //TODO should this be here?
-            fileArray[i]->addEventType("TTL",ArfFileBase::U8,"event_channels");
-            fileArray[i]->addEventType("Messages",ArfFileBase::STR,"Text");
-            
-            fileArray[i]->startNewRecording(recordingNumber,bitVoltsArray[i]->size(),infoArray[i]);
-        }
-    }
+    mainFile->startNewRecording(recordingNumber,getNumRecordedChannels(), mainInfo, recordedChanToKWDChan, procMap);
     
     
     for (int i=0; i<getNumRecordedChannels(); i++)
@@ -187,18 +172,12 @@ void ArfRecording::closeFiles()
     spikesFile->stopRecording();
     spikesFile->close();
     //TODO There are some unsaved samples in partBuf when we stop recording. However, only savingNum of them at most.
-    for (int i = 0; i < fileArray.size(); i++)
-    {
-        if (fileArray[i]->isOpen())
-        {
-			std::cout << "Closed file " << i << std::endl;
-            fileArray[i]->stopRecording();
-            fileArray[i]->close();
-            bitVoltsArray[i]->clear();
-			sampleRatesArray[i]->clear();
-        }
-		channelsPerProcessor.set(i, 0);
-    }
+    
+    mainFile->stopRecording();
+    mainFile->close();
+    bitVolts.clear();
+    sampleRates.clear();
+
 	recordedChanToKWDChan.clear();
 	channelTimestampArray.clear();
 	channelLeftOverSamples.clear();
@@ -258,7 +237,7 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
         }
     }
     else { //saving to one file
-        fileArray[index]->writeChannel(intBuffer.getData(), size, recordedChanToKWDChan[writeChannel]);
+        mainFile->writeChannel(intBuffer.getData(), size, writeChannel);
     }
 
 }
@@ -275,7 +254,7 @@ void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 tim
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)
     {
-        fileArray[0]->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),timestamp);
+        mainFile->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),timestamp);
     }
         
     else if (eventType == GenericProcessor::MESSAGE)
@@ -289,7 +268,7 @@ void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 tim
         }
         else
         {
-            fileArray[0]->writeEvent(1,*(dataptr+2),*(dataptr+1),(void*)(dataptr+6),timestamp);
+            mainFile->writeEvent(1,*(dataptr+2),*(dataptr+1),(void*)(dataptr+6),timestamp);
         }
     }
 }
@@ -298,13 +277,12 @@ void ArfRecording::processSpecialEvent(String msg)
 {
     StringArray words = StringArray();
     words.addTokens(msg, " ", "\"");
-    //TODO probably better to set attributes of files in fileArray?
     std::cout << words[1] << std::endl;
-    if (words[1].compare("SetAttr"))
+    if (words[1].compare("SetAttr")==0)
     {
-        fileArray[0]->setAttributeStr(words[3], "/rec_"+String(recordingNumber), words[2]);
+        mainFile->setAttributeStr(words[3], "/rec_"+String(recordingNumber), words[2]);
     }
-    else if(words[1].compare("TS"))
+    else if(words[1].compare("TS")==0)
     {
         int64 ts = words[2].getLargeIntValue();
         String msg = words[3];

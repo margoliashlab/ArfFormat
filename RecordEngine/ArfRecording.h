@@ -58,6 +58,11 @@ private:
     OwnedArray<Array<float>> bitVoltsArray;
     OwnedArray<Array<float>> sampleRatesArray;
 	OwnedArray<Array<int64>> channelTimestampArray;
+    
+    Array<float> bitVolts;
+    Array<float> sampleRates;
+    Array<int> procMap;
+    
 	Array<int> channelLeftOverSamples;
     OwnedArray<ArfFile> fileArray;
     OwnedArray<ArfRecordingInfo> infoArray;
@@ -65,6 +70,9 @@ private:
 	HeapBlock<float> scaledBuffer;
 	HeapBlock<int16> intBuffer;
 	int bufferSize;    
+    
+    ScopedPointer<ArfFile> mainFile;
+    ScopedPointer<ArfRecordingInfo> mainInfo;
 
     int savingNum;
     OwnedArray<Array<int16>, CriticalSection> partBuffer;

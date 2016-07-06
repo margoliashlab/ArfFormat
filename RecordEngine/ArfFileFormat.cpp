@@ -828,14 +828,14 @@ String ArfFile::getFileName()
     return filename;
 }
 
-void ArfFile::initFile(int processorNumber, String basename)
+void ArfFile::initFile(int processorNumber, String basename) //TODO don't need processor number here
 {
     if (isOpen()) return;
-    filename = basename + "_" + String(processorNumber) + ".arf";
+    filename = basename + ".arf";
     readyToOpen=true;
 }
 
-void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info)
+void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info, Array<int> recordedChanToKWDChan, Array<int> procMap)
 {
     this->recordingNumber = recordingNumber;
     this->nChannels = nChannels;
@@ -869,6 +869,8 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
         CHECK_ERROR(setAttributeStr(String("V"), channelPath, String("units")));
         int64 datatype = 0;
         CHECK_ERROR(setAttribute(I64,&datatype,channelPath, String("datatype")));
+        CHECK_ERROR(setAttribute(I32, procMap.getRawDataPointer()+i, channelPath, String("nodeID")));
+        CHECK_ERROR(setAttribute(I32, recordedChanToKWDChan.getRawDataPointer()+i, channelPath, String("node_channel_no")));
     }
     
     //Creating hierarchy for events
