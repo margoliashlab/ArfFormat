@@ -61,7 +61,6 @@ private:
 	Array<int> channelLeftOverSamples;
     OwnedArray<ArfFile> fileArray;
     OwnedArray<ArfRecordingInfo> infoArray;
-    ScopedPointer<AEFile> eventFile;
     ScopedPointer<AXFile> spikesFile;
 	HeapBlock<float> scaledBuffer;
 	HeapBlock<int16> intBuffer;

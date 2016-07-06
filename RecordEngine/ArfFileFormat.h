@@ -199,55 +199,6 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArfFile);
 };
 
-class AEFile : public ArfFileBase
-{
-public:
-    AEFile(String basename);
-    AEFile();
-    virtual ~AEFile();
-    void initFile(String basename);
-    void startNewRecording(int recordingNumber, ArfRecordingInfo* info);
-    void stopRecording();
-    void writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp);
-    void addEventType(String name, DataTypes type, String dataName);
-    String getFileName();
-
-
-protected:
-    int createFileStructure();
-
-private:
-    typedef struct MessageEvent {
-        float time;
-        int32 recording;
-        uint8 eventID;
-        uint8 nodeID;
-        char text[MAX_STR_SIZE];        
-    } MessageEvent;
-    typedef struct TTLEvent {
-        float time;
-        int32 recording;
-        uint8 eventID;
-        uint8 nodeID;
-        uint8 event_channel;        
-    } TTLEvent;
-   
-    int recordingNumber;
-    float sample_rate;
-    String filename;
-    
-    OwnedArray<ArfRecordingData> eventFullData;
-    Array<String> eventNames;
-    Array<DataTypes> eventTypes;
-    Array<String> eventDataNames;
-    
-    Array<int> eventSizes;
-    Array<H5::CompType> eventCompTypes;
-    
-    int kwdIndex;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AEFile);
-};
 
 class AXFile : public ArfFileBase
 {

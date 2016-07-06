@@ -108,8 +108,6 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
         std::cout << "Opening part" << partNo << std::endl;
     }
     String basepath = rootFolder.getFullPathName() + rootFolder.separatorString + "experiment" + String(experimentNumber) + partName;
-    eventFile->initFile(basepath);
-    eventFile->open();
 
     spikesFile->initFile(basepath);
     spikesFile->open();
@@ -121,7 +119,6 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
 	infoArray[0]->start_time = getTimestamp(0);
 
     infoArray[0]->start_sample = 0;
-    eventFile->startNewRecording(recordingNumber,infoArray[0]);
 
 	recordedChanToKWDChan.clear();
 	Array<int> processorRecPos;
@@ -187,8 +184,6 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
 
 void ArfRecording::closeFiles()
 {    
-    eventFile->stopRecording();
-    eventFile->close();
     spikesFile->stopRecording();
     spikesFile->close();
     //TODO There are some unsaved samples in partBuf when we stop recording. However, only savingNum of them at most.
@@ -307,7 +302,7 @@ void ArfRecording::processSpecialEvent(String msg)
     std::cout << words[1] << std::endl;
     if (words[1].compare("SetAttr"))
     {
-        fileArray[0]->setAttributeStr(words[3], "/event_types", words[2]);        
+        fileArray[0]->setAttributeStr(words[3], "/rec_"+String(recordingNumber), words[2]);
     }
     else if(words[1].compare("TS"))
     {
@@ -331,9 +326,6 @@ void ArfRecording::writeSpike(int electrodeIndex, const SpikeObject& spike, int6
 
 void ArfRecording::startAcquisition()
 {
-    eventFile = new AEFile();
-    eventFile->addEventType("TTL",ArfFileBase::U8,"event_channels");
-    eventFile->addEventType("Messages",ArfFileBase::STR,"Text");
     spikesFile = new AXFile();
 }
 
