@@ -870,6 +870,35 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
         int64 datatype = 0;
         CHECK_ERROR(setAttribute(I64,&datatype,channelPath, String("datatype")));
     }
+    
+    //Creating hierarchy for events
+    for (int i=0; i < eventNames.size(); i++)
+    {
+        ScopedPointer<ArfRecordingData> dSet;
+        // e.g /rec_0/Messages
+        String path = recordPath+"/";
+
+        int max_dims[3] = {0, 0, 0};
+        int chunk_dims[3] = {EVENT_CHUNK_SIZE, 0, 0};
+        dSet = createCompoundDataSet(eventCompTypes[i],path + eventNames[i], 1, max_dims, chunk_dims);
+        CHECK_ERROR(setAttributeStr(String("samples"), path + eventNames[i], String("units")));
+        
+    }
+    
+    this->sample_rate = info->sample_rate;
+    kwdIndex=0;
+    for (int i = 0; i < eventNames.size(); i++)
+    {
+        ArfRecordingData* dSet;
+        
+        String path = recordPath + "/" + eventNames[i];
+        
+        dSet = getDataSet(path);
+        eventFullData.add(dSet);
+
+    }    
+    
+    
     curChan = nChannels;
 }
 
@@ -879,11 +908,14 @@ void ArfFile::stopRecording()
     recdata = nullptr;
     recarr.clear();
 	tsData = nullptr;
+    eventFullData.clear();
 }
 
 int ArfFile::createFileStructure()
 {
     if (setAttributeStr(ARF_VERSION, "/", "arf_version")) return -1;
+    
+    
     return 0;
 }
 
@@ -922,6 +954,79 @@ void ArfFile::writeTimestamps(int64* ts, int nTs, int channel)
 	{
 		CHECK_ERROR(tsData->writeDataRow(channel, nTs, I64, ts));
 	}
+}
+
+void ArfFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp)
+{
+    if (type > eventNames.size() || type < 0)
+    {
+        std::cerr << "writeEvent Invalid event type " << type << std::endl;
+        return;
+    }
+    
+    //Declare here, so that they are still in scope when we call write.
+    //This is unfortunately silly. If you add event types, you need to add pointers here.
+    MessageEvent evm;
+    TTLEvent evt;
+    void* evptr;
+
+    float time = timestamp / sample_rate;
+
+    if (eventNames[type] == "Messages")
+    {
+        evm.time = time;
+        evm.recording = recordingNumber;
+        evm.eventID = id;
+        evm.nodeID = processor;
+        String str = String((char*)data);
+        str.copyToUTF8(evm.text, MAX_STR_SIZE);
+        evptr = (void*)&evm;     
+    }
+    else if (eventNames[type] == "TTL")
+    {
+        evt.time = time;
+        evt.recording = recordingNumber;
+        evt.eventID = id;
+        evt.nodeID = processor;
+        evt.event_channel = *((uint8*)data);
+        evptr = (void*)&evt;
+    }    
+
+    eventFullData[type]->writeCompoundData(1, 0, eventCompTypes[type], evptr); 
+}
+
+void ArfFile::addEventType(String name, DataTypes type, String dataName)
+{    
+    eventNames.add(name);
+    eventTypes.add(type);
+    eventDataNames.add(dataName);  
+    
+    size_t typesize = (type == STR) ? MAX_STR_SIZE : getNativeType(type).getSize();
+    size_t size = 2*sizeof(uint8)+sizeof(int) + sizeof(float) + typesize;
+    eventSizes.add(size);
+    CompType ctype(size);
+    if (name == "Messages")
+    {         
+        ctype.insertMember(H5std_string("start"), HOFFSET(MessageEvent, time), PredType::NATIVE_FLOAT);
+        ctype.insertMember(H5std_string("recording"), HOFFSET(MessageEvent, recording), PredType::NATIVE_INT32);
+        ctype.insertMember(H5std_string("eventID"), HOFFSET(MessageEvent, eventID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("nodeID"), HOFFSET(MessageEvent, nodeID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("Text"), HOFFSET(MessageEvent, text), getNativeType(type));        
+        eventCompTypes.add(ctype);
+    }
+    else if (name == "TTL")
+    {
+        ctype.insertMember(H5std_string("start"), HOFFSET(TTLEvent, time), PredType::NATIVE_FLOAT);
+        ctype.insertMember(H5std_string("recording"), HOFFSET(TTLEvent, recording), PredType::NATIVE_INT32);
+        ctype.insertMember(H5std_string("eventID"), HOFFSET(TTLEvent, eventID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("nodeID"), HOFFSET(TTLEvent, nodeID), PredType::NATIVE_UINT8);
+        ctype.insertMember(H5std_string("event_channel"), HOFFSET(TTLEvent, event_channel), getNativeType(type));
+        eventCompTypes.add(ctype);      
+    }
+    else
+    {
+        std::cerr << "Event type" << name << "not implemented; look at ArfFileFormat.cpp";
+    }
 }
 
 //Events file
@@ -1029,11 +1134,7 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
         evptr = (void*)&evt;
     }    
 
-    eventFullData[type]->writeCompoundData(1, 0, eventCompTypes[type], evptr);
-    
-    
-    
-    
+    eventFullData[type]->writeCompoundData(1, 0, eventCompTypes[type], evptr); 
 }
 
 

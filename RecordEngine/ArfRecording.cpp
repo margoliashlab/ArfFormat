@@ -167,9 +167,15 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
             infoArray[i]->bitVolts.addArray(*bitVoltsArray[i]);
             infoArray[i]->channelSampleRates.clear();
             infoArray[i]->channelSampleRates.addArray(*sampleRatesArray[i]);
+            
+            //TODO should this be here?
+            fileArray[i]->addEventType("TTL",ArfFileBase::U8,"event_channels");
+            fileArray[i]->addEventType("Messages",ArfFileBase::STR,"Text");
+            
             fileArray[i]->startNewRecording(recordingNumber,bitVoltsArray[i]->size(),infoArray[i]);
         }
     }
+    
     
     for (int i=0; i<getNumRecordedChannels(); i++)
     {        
@@ -274,7 +280,7 @@ void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 tim
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)
     {
-        eventFile->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),timestamp);
+        fileArray[0]->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),timestamp);
     }
         
     else if (eventType == GenericProcessor::MESSAGE)
@@ -288,8 +294,7 @@ void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 tim
         }
         else
         {
-            eventFile->writeEvent(1,*(dataptr+2),*(dataptr+1),(void*)(dataptr+6),timestamp);
-        
+            fileArray[0]->writeEvent(1,*(dataptr+2),*(dataptr+1),(void*)(dataptr+6),timestamp);
         }
     }
 }
@@ -302,7 +307,7 @@ void ArfRecording::processSpecialEvent(String msg)
     std::cout << words[1] << std::endl;
     if (words[1].compare("SetAttr"))
     {
-        eventFile->setAttributeStr(words[3], "/event_types", words[2]);        
+        fileArray[0]->setAttributeStr(words[3], "/event_types", words[2]);        
     }
     else if(words[1].compare("TS"))
     {
