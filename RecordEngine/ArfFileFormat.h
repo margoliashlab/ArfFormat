@@ -147,7 +147,7 @@ public:
     String getFileName();
     
     //For events
-    void writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp);
+    void writeEvent(int type, uint8 id, uint8 processor, void* data, int64 timestamp);
     void addEventType(String name, DataTypes type, String dataName);
     
     //For spikes

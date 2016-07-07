@@ -145,6 +145,7 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
     
     mainInfo->name = String("Open Ephys Recording #") + String(recordingNumber);
     mainInfo->start_sample = 0;
+    mainInfo->sample_rate = infoArray[0]->sample_rate;
     mainInfo->bitVolts.clear();
     mainInfo->bitVolts.addArray(bitVolts);
     mainInfo->channelSampleRates.clear();
@@ -247,6 +248,9 @@ void ArfRecording::endChannelBlock(bool lastBlock)
 void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 timestamp)
 {
     //TODO makes no sense to lock before processing special message
+    
+    //Currently timestamp is general, not relative to the current part.
+    //If you want relative, then you can pass timestamp % (savingNum * cntPerPart)
     ScopedLock sl(partLock);
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)

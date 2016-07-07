@@ -976,7 +976,7 @@ void ArfFile::writeTimestamps(int64* ts, int nTs, int channel)
 	}
 }
 
-void ArfFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp)
+void ArfFile::writeEvent(int type, uint8 id, uint8 processor, void* data, int64 timestamp)
 {
     if (type > eventNames.size() || type < 0)
     {
@@ -990,7 +990,7 @@ void ArfFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64
     TTLEvent evt;
     void* evptr;
 
-    float time = timestamp / sample_rate;
+    float time = (float)timestamp / sample_rate;
 
     if (eventNames[type] == "Messages")
     {
