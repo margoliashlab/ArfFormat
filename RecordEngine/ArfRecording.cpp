@@ -34,8 +34,8 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
-    savingNum = 20000; //this is also declared as a const
-    cntPerPart = 1000;
+    savingNum = SAVING_NUM; //declared as a const in ArfRecording.h
+    cntPerPart = 10000;
     partNo = 0;
     partCnt = 0;
 }
@@ -250,7 +250,11 @@ void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 tim
     //TODO makes no sense to lock before processing special message
     
     //Currently timestamp is general, not relative to the current part.
-    //If you want relative, then you can pass timestamp % (savingNum * cntPerPart)
+    if (savingNum > 0)
+    {
+        //Timestamp relative to current part
+        timestamp = timestamp % (savingNum * cntPerPart);
+    }
     ScopedLock sl(partLock);
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)
@@ -298,8 +302,14 @@ void ArfRecording::addSpikeElectrode(int index, const SpikeRecordInfo* elec)
 }
 void ArfRecording::writeSpike(int electrodeIndex, const SpikeObject& spike, int64 /*timestamp*/)
 {
+    int64 timestamp = spike.timestamp;
+    if (savingNum > 0)
+    {
+        //Timestamp relative to current part
+        timestamp = timestamp % (savingNum * cntPerPart);
+    }
     ScopedLock sl(partLock);
-    float time = (float)spike.timestamp / spike.samplingFrequencyHz;
+    float time = (float)timestamp / spike.samplingFrequencyHz;
     mainFile->writeSpike(electrodeIndex,spike.nSamples,spike.data,time);
 }
 
