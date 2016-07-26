@@ -27,7 +27,7 @@
 #include <RecordingLib.h>
 #include "ArfFileFormat.h"
 
-#define SAVING_NUM 20000
+#define SAVING_NUM 0
 
 class ArfRecording : public RecordEngine
 {

@@ -250,11 +250,7 @@ void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 tim
     //TODO makes no sense to lock before processing special message
     
     //Currently timestamp is general, not relative to the current part.
-    if (savingNum > 0)
-    {
-        //Timestamp relative to current part
-        timestamp = timestamp % (savingNum * cntPerPart);
-    }
+    //Maybe you need to subtract how much samples have passed
     ScopedLock sl(partLock);
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)
@@ -303,11 +299,7 @@ void ArfRecording::addSpikeElectrode(int index, const SpikeRecordInfo* elec)
 void ArfRecording::writeSpike(int electrodeIndex, const SpikeObject& spike, int64 /*timestamp*/)
 {
     int64 timestamp = spike.timestamp;
-    if (savingNum > 0)
-    {
-        //Timestamp relative to current part
-        timestamp = timestamp % (savingNum * cntPerPart);
-    }
+    // What if multiple parts? Maybe you need to subtract how much samples have passed
     ScopedLock sl(partLock);
     float time = (float)timestamp / spike.samplingFrequencyHz;
     mainFile->writeSpike(electrodeIndex,spike.nSamples,spike.data,time);
