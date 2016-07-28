@@ -828,14 +828,17 @@ String ArfFile::getFileName()
     return filename;
 }
 
-void ArfFile::initFile(int processorNumber, String basename)
+void ArfFile::initFile(int processorNumber, String basename) //TODO don't need processor number here
 {
     if (isOpen()) return;
-    filename = basename + "_" + String(processorNumber) + ".arf";
+    filename = basename + ".arf";
     readyToOpen=true;
+    
+    //For spikes
+    numElectrodes=0;
 }
 
-void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info)
+void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info, Array<int> recordedChanToKWDChan, Array<int> procMap)
 {
     this->recordingNumber = recordingNumber;
     this->nChannels = nChannels;
@@ -869,7 +872,52 @@ void ArfFile::startNewRecording(int recordingNumber, int nChannels, ArfRecording
         CHECK_ERROR(setAttributeStr(String("V"), channelPath, String("units")));
         int64 datatype = 0;
         CHECK_ERROR(setAttribute(I64,&datatype,channelPath, String("datatype")));
+        CHECK_ERROR(setAttribute(I32, procMap.getRawDataPointer()+i, channelPath, String("nodeID")));
+        CHECK_ERROR(setAttribute(I32, recordedChanToKWDChan.getRawDataPointer()+i, channelPath, String("node_channel_no")));
     }
+    
+    //Creating hierarchy for events
+    for (int i=0; i < eventNames.size(); i++)
+    {
+        ScopedPointer<ArfRecordingData> dSet;
+        // e.g /rec_0/Messages
+        String path = recordPath + "/";
+
+        int max_dims[3] = {0, 0, 0};
+        int chunk_dims[3] = {EVENT_CHUNK_SIZE, 0, 0};
+        dSet = createCompoundDataSet(eventCompTypes[i],path + eventNames[i], 1, max_dims, chunk_dims);
+        CHECK_ERROR(setAttributeStr(String("samples"), path + eventNames[i], String("units")));
+        
+    }
+    this->sample_rate = info->sample_rate;
+    kwdIndex=0;
+    for (int i = 0; i < eventNames.size(); i++)
+    {
+        ArfRecordingData* dSet;
+        
+        String path = recordPath + "/" + eventNames[i];
+        
+        dSet = getDataSet(path);
+        eventFullData.add(dSet);
+    }    
+    
+    //For spikes
+    transformVector.malloc(MAX_TRANSFORM_SIZE);
+    
+    for (int i=0; i < channelArray.size(); i++)
+    {
+        createChannelGroup(i);
+    }
+    for (int i=0; i < channelArray.size(); i++)
+    {
+        ArfRecordingData* dSet;
+        String path = recordPath + "/spike_group"+String(i);
+        
+        dSet = getDataSet(path);
+        spikeFullDataArray.add(dSet);
+    }
+    
+    
     curChan = nChannels;
 }
 
@@ -879,11 +927,15 @@ void ArfFile::stopRecording()
     recdata = nullptr;
     recarr.clear();
 	tsData = nullptr;
+    eventFullData.clear();
+    spikeFullDataArray.clear();
 }
 
 int ArfFile::createFileStructure()
 {
     if (setAttributeStr(ARF_VERSION, "/", "arf_version")) return -1;
+    
+    
     return 0;
 }
 
@@ -924,76 +976,7 @@ void ArfFile::writeTimestamps(int64* ts, int nTs, int channel)
 	}
 }
 
-//Events file
-
-AEFile::AEFile(String basename) : ArfFileBase()
-{
-    initFile(basename);
-}
-
-AEFile::AEFile() : ArfFileBase()
-{
-
-}
-
-AEFile::~AEFile() {}
-
-String AEFile::getFileName()
-{
-    return filename;
-}
-
-void AEFile::initFile(String basename)
-{
-    if (isOpen()) return;
-    filename = basename + "_events.arf";
-    readyToOpen=true;
-    
-}
-
-int AEFile::createFileStructure()
-{
-    if (setAttributeStr(ARF_VERSION, "/", "arf_version")) return -1;
-    if (createGroup("/event_types")) return -1;
-    String uuid = Uuid().toDashedString();
-    CHECK_ERROR(setAttributeStr(uuid, String("event_types"), String("uuid")));
-    for (int i=0; i < eventNames.size(); i++)
-    {
-        ScopedPointer<ArfRecordingData> dSet;
-        String path = "/event_types/";
-
-        int max_dims[3] = {0, 0, 0};
-        int chunk_dims[3] = {EVENT_CHUNK_SIZE, 0, 0};
-        dSet = createCompoundDataSet(eventCompTypes[i],path + eventNames[i], 1, max_dims, chunk_dims);
-        CHECK_ERROR(setAttributeStr(String("samples"), path + eventNames[i], String("units")));
-        
-    }
-    return 0;
-}
-
-void AEFile::startNewRecording(int recordingNumber, ArfRecordingInfo* info)
-{
-    this->recordingNumber = recordingNumber;
-    this->sample_rate = info->sample_rate;
-    kwdIndex=0;
-    for (int i = 0; i < eventNames.size(); i++)
-    {
-        ArfRecordingData* dSet;
-        
-        String path = "/event_types/" + eventNames[i];
-        
-        dSet = getDataSet(path);
-        eventFullData.add(dSet);
-
-    }
-}
-
-void AEFile::stopRecording()
-{
-    eventFullData.clear();
-}
-
-void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp)
+void ArfFile::writeEvent(int type, uint8 id, uint8 processor, void* data, int64 timestamp)
 {
     if (type > eventNames.size() || type < 0)
     {
@@ -1007,7 +990,7 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
     TTLEvent evt;
     void* evptr;
 
-    float time = timestamp / sample_rate;
+    float time = (float)timestamp / sample_rate;
 
     if (eventNames[type] == "Messages")
     {
@@ -1029,15 +1012,10 @@ void AEFile::writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 
         evptr = (void*)&evt;
     }    
 
-    eventFullData[type]->writeCompoundData(1, 0, eventCompTypes[type], evptr);
-    
-    
-    
-    
+    eventFullData[type]->writeCompoundData(1, 0, eventCompTypes[type], evptr); 
 }
 
-
-void AEFile::addEventType(String name, DataTypes type, String dataName)
+void ArfFile::addEventType(String name, DataTypes type, String dataName)
 {    
     eventNames.add(name);
     eventTypes.add(type);
@@ -1071,53 +1049,7 @@ void AEFile::addEventType(String name, DataTypes type, String dataName)
     }
 }
 
-//Spikes file
-
-AXFile::AXFile(String basename) : ArfFileBase()
-{
-    initFile(basename);
-    numElectrodes=0;
-    transformVector.malloc(MAX_TRANSFORM_SIZE);
-}
-
-AXFile::AXFile() : ArfFileBase()
-{
-    numElectrodes=0;
-    transformVector.malloc(MAX_TRANSFORM_SIZE);
-}
-
-AXFile::~AXFile()
-{
-}
-
-String AXFile::getFileName()
-{
-    return filename;
-}
-
-void AXFile::initFile(String basename)
-{
-    if (isOpen()) return;
-    filename = basename + "_spikes.arf";
-    readyToOpen=true;
-}
-
-int AXFile::createFileStructure()
-{
-    const uint16 ver = 2;
-    if (createGroup("/channel_groups")) return -1;
-    String uuid = Uuid().toDashedString();
-    CHECK_ERROR(setAttributeStr(uuid, String("/channel_groups"), String("uuid")));
-    if (setAttributeStr(ARF_VERSION, "/", "arf_version")) return -1;
-    for (int i=0; i < channelArray.size(); i++)
-    {
-        int res = createChannelGroup(i);
-        if (res) return -1;
-    }
-    return 0;
-}
-
-void AXFile::addChannelGroup(int nChannels)
+void ArfFile::addChannelGroup(int nChannels)
 {
     channelArray.add(nChannels);
     numElectrodes++;
@@ -1132,50 +1064,26 @@ void AXFile::addChannelGroup(int nChannels)
     spikeCompTypes.add(spiketype);
 }
 
-int AXFile::createChannelGroup(int index)
+int ArfFile::createChannelGroup(int index)
 {
     ScopedPointer<ArfRecordingData> dSet;
     int nChannels = channelArray[index];
-    String path("/channel_groups/"+String(index));
-    //CHECK_ERROR(createGroup(path));
+    String path("/rec_" + String(recordingNumber) + "/spike_group" + String(index));
     
     int max_dims[3] = {0, 0, 0}; //first dimension set to 0, because we want it unlimited (look at createCompoundDataSet)
     int chunk_dims[3] = {SPIKE_CHUNK_XSIZE, 0, 0};
     dSet = createCompoundDataSet(spikeCompTypes[index], path, 1, max_dims, chunk_dims);
     CHECK_ERROR(setAttributeStr(String("samples"), path, String("units")));
-    
     return 0;
 }
 
-void AXFile::startNewRecording(int recordingNumber)
-{
-    ArfRecordingData* dSet;
-    String path;
-    this->recordingNumber = recordingNumber;
-
-    for (int i=0; i < channelArray.size(); i++)
-    {
-        path = "/channel_groups/"+String(i);
-        
-        dSet = getDataSet(path);
-        spikeFullDataArray.add(dSet);
-    }
-}
-
-void AXFile::stopRecording()
-{
-
-    spikeFullDataArray.clear();
-    
-}
-
-void AXFile::resetChannels()
+void ArfFile::resetChannels()
 {
     stopRecording(); //Just in case
     channelArray.clear();
 }
 
-void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, float time)
+void ArfFile::writeSpike(int groupIndex, int nSamples, const uint16* data, float time)
 {
     if ((groupIndex < 0) || (groupIndex >= numElectrodes))
     {
@@ -1212,5 +1120,4 @@ void AXFile::writeSpike(int groupIndex, int nSamples, const uint16* data, float 
         {*(waveBuf++) = 0;}
     
     spikeFullDataArray[groupIndex]->writeCompoundData(1, 0, spikeCompTypes[groupIndex], (void*)&spikeinfo);
-
 }

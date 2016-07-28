@@ -27,6 +27,8 @@
 #include <RecordingLib.h>
 #include "ArfFileFormat.h"
 
+#define SAVING_NUM 0
+
 class ArfRecording : public RecordEngine
 {
 public:
@@ -49,6 +51,8 @@ public:
 private:
 
     int processorIndex;
+    
+    void processSpecialEvent(String msg);
 
     Array<int> processorMap;
 	Array<int> channelsPerProcessor;
@@ -56,17 +60,27 @@ private:
     OwnedArray<Array<float>> bitVoltsArray;
     OwnedArray<Array<float>> sampleRatesArray;
 	OwnedArray<Array<int64>> channelTimestampArray;
+    
+    Array<float> bitVolts;
+    Array<float> sampleRates;
+    Array<int> procMap;
+    
 	Array<int> channelLeftOverSamples;
     OwnedArray<ArfFile> fileArray;
     OwnedArray<ArfRecordingInfo> infoArray;
-    ScopedPointer<AEFile> eventFile;
-    ScopedPointer<AXFile> spikesFile;
 	HeapBlock<float> scaledBuffer;
 	HeapBlock<int16> intBuffer;
 	int bufferSize;    
+    
+    Array<int> spikeInfoArray;
+    
+    ScopedPointer<ArfFile> mainFile;
+    ScopedPointer<ArfRecordingInfo> mainInfo;
 
     int savingNum;
-    OwnedArray<Array<int16>, CriticalSection> partBuffer;
+    
+    //To ensure always at least 3*SAVING_NUM is allocated in all of the arrays
+    OwnedArray<Array<int16, CriticalSection, 3*SAVING_NUM>, CriticalSection> partBuffer;
     int partNo;
     int partCnt;
     int cntPerPart;

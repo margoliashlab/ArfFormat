@@ -67,13 +67,16 @@ public:
     static H5::DataType getNativeType(DataTypes type);
     static H5::DataType getH5Type(DataTypes type);
     
+    //moved from protected to be able to set attributes through messages
+    int setAttributeStr(String value, String path, String name);
+    
     
 protected:
 
     virtual int createFileStructure() = 0;
 
     int setAttribute(DataTypes type, void* data, String path, String name);
-    int setAttributeStr(String value, String path, String name);
+    
     int setAttributeAsArray(DataTypes type, void* data, int size, String path, String name);
     int setAttributeArray(DataTypes type, void* data, int size, String path, String name);
     int createGroup(String path);
@@ -134,7 +137,7 @@ public:
     ArfFile();
     virtual ~ArfFile();
     void initFile(int processorNumber, String basename);
-    void startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info);
+    void startNewRecording(int recordingNumber, int nChannels, ArfRecordingInfo* info, Array<int> recordedChanToKWDChan, Array<int> procMap);
     void stopRecording();
     void writeBlockData(int16* data, int nSamples);
     void writeRowData(int16* data, int nSamples);
@@ -142,6 +145,16 @@ public:
     void writeChannel(int16* data, int nSamples, int noChannel);
 	void writeTimestamps(int64* ts, int nTs, int channel);
     String getFileName();
+    
+    //For events
+    void writeEvent(int type, uint8 id, uint8 processor, void* data, int64 timestamp);
+    void addEventType(String name, DataTypes type, String dataName);
+    
+    //For spikes
+    void addChannelGroup(int nChannels);
+    void resetChannels();
+    void writeSpike(int groupIndex, int nSamples, const uint16* data, float time);
+    
 
 protected:
     int createFileStructure();
@@ -158,28 +171,7 @@ private:
     OwnedArray<ArfRecordingData> recarr;
     
     
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArfFile);
-};
-
-class AEFile : public ArfFileBase
-{
-public:
-    AEFile(String basename);
-    AEFile();
-    virtual ~AEFile();
-    void initFile(String basename);
-    void startNewRecording(int recordingNumber, ArfRecordingInfo* info);
-    void stopRecording();
-    void writeEvent(int type, uint8 id, uint8 processor, void* data, uint64 timestamp);
-    void addEventType(String name, DataTypes type, String dataName);
-    String getFileName();
-
-
-protected:
-    int createFileStructure();
-
-private:
+    //For events
     typedef struct MessageEvent {
         float time;
         int32 recording;
@@ -195,9 +187,7 @@ private:
         uint8 event_channel;        
     } TTLEvent;
    
-    int recordingNumber;
     float sample_rate;
-    String filename;
     
     OwnedArray<ArfRecordingData> eventFullData;
     Array<String> eventNames;
@@ -208,35 +198,12 @@ private:
     Array<H5::CompType> eventCompTypes;
     
     int kwdIndex;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AEFile);
-};
-
-class AXFile : public ArfFileBase
-{
-public:
-    AXFile(String basename);
-    AXFile();
-    virtual ~AXFile();
-    void initFile(String basename);
-    void startNewRecording(int recordingNumber);
-    void stopRecording();
-    void addChannelGroup(int nChannels);
-    void resetChannels();
-    void writeSpike(int groupIndex, int nSamples, const uint16* data, float time);
-    String getFileName();
-
-protected:
-    int createFileStructure();
-
-private:
+    
+    //For spikes
     int createChannelGroup(int index);
-    int recordingNumber;
-    String filename;
     OwnedArray<ArfRecordingData> spikeArray;
     OwnedArray<ArfRecordingData> recordingArray;
     OwnedArray<ArfRecordingData> timeStamps;
-    
     OwnedArray<ArfRecordingData> spikeFullDataArray;
     
     Array<int> channelArray;
@@ -253,7 +220,7 @@ private:
     SpikeInfo spikeinfo;
     
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AXFile);
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ArfFile);
 };
 
 #endif  // ARFFILEFORMAT_H_INCLUDED
