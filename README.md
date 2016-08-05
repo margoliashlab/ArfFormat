@@ -25,21 +25,24 @@ sudo apt-get install libzmq3-dbg libzmq3-dev libzmq3
 sudo apt-get install libhdf5-dev libhdf5-cpp-10
 ```
 
+Also to be able to use the acquisition board, you need to do:
+
+```
+sudo cp 40-open-ephys.rules /etc/udev/rules.d
+sudo service udev restart
+```
+
 Now we want to compile the GUI.
 
 ```
 cd Builds/Linux
 ```
 
-On some versions of Linux there is a bug that causes the GUI to freeze when you try to open a file or select a directory. To avoid that, edit the lines in files Makefile and Makefile.plugins in the current directory (there should be 2 such lines in each file) from
-`CPPFLAGS := $(DEPFLAGS) -D “LINUX=1” -D “DEBUG=1” ...`
-to
-```
-CPPFLAGS := $(DEPFLAGS) -D “LINUX=1” -D “JUCE_DISABLE_NATIVE_FILECHOOSERS=1” -D “DEBUG=1
-```
+On some versions of Linux there is a bug that causes the GUI to freeze when you try to open a file or select a directory. To avoid that, edit the lines starting with `CPPFLAGS` in files Makefile and Makefile.plugins in the current directory (there should be 2 such lines in each file), so that they also include `-D "JUCE_DISABLE_NATIVE_FILECHOOSERS=1"` (if you copy and paste, make sure the quote characters are the same as in the rest of the file).
+
 and add a line 
 `JUCE_DISABLE_NATIVE_FILECHOOSERS=1`
-anywhere in both files.
+somewhere at the top of both files.
 
 Then you can compile.
 ```
