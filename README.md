@@ -40,9 +40,6 @@ cd Builds/Linux
 
 On some versions of Linux there is a bug that causes the GUI to freeze when you try to open a file or select a directory. To avoid that, edit the lines starting with `CPPFLAGS` in files Makefile and Makefile.plugins in the current directory (there should be 2 such lines in each file), so that they also include `-D "JUCE_DISABLE_NATIVE_FILECHOOSERS=1"` (if you copy and paste, make sure the quote characters are the same as in the rest of the file).
 
-and add a line 
-`JUCE_DISABLE_NATIVE_FILECHOOSERS=1`
-somewhere at the top of both files.
 
 Then you can compile.
 ```
