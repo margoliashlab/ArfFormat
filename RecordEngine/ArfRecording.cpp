@@ -35,7 +35,7 @@ ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), 
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
     savingNum = SAVING_NUM; //declared as a const in ArfRecording.h
-    cntPerPart = 10000;
+    cntPerPart = 1000;
     partNo = 0;
     partCnt = 0;
 }
@@ -44,18 +44,16 @@ ArfRecording::~ArfRecording()
 {	
 }
 
-String ArfRecording::getEngineID() const
+String ArfRecording::getEngineID()
 {
     return "Arf";
 }
 
 
-void ArfRecording::registerProcessor(const GenericProcessor* proc)
+void ArfRecording::registerProcessor(GenericProcessor* proc)
 {
     ArfRecordingInfo* info = new ArfRecordingInfo();
-	//This is a VERY BAD thig to do. temporary only until we fix const-correctness on GenericEditor methods
-	//(which implies modifying all the plugins and processors)
-    info->sample_rate = const_cast<GenericProcessor*>(proc)->getSampleRate();
+    info->sample_rate = proc->getSampleRate();
     info->bit_depth = 16;
     info->multiSample = false;
     infoArray.add(info);
@@ -90,7 +88,7 @@ void ArfRecording::resetChannels()
     partCnt = 0;
 }
 
-void ArfRecording::addChannel(int index,const Channel* chan)
+void ArfRecording::addChannel(int index, Channel* chan)
 {
     processorMap.add(processorIndex);
 }
@@ -110,11 +108,11 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
 
 
     //Let's just put the first processor (usually the source node) on the KWIK for now
-    infoArray[0]->name = String("Open Ephys Recording #") + String(recordingNumber);
+ //    infoArray[0]->name = String("Open Ephys Recording #") + String(recordingNumber);
 
-	infoArray[0]->start_time = getTimestamp(0);
+	// infoArray[0]->start_time = getTimestamp(0);
 
-    infoArray[0]->start_sample = 0;
+ //    infoArray[0]->start_sample = 0;
 
 	recordedChanToKWDChan.clear();
 	Array<int> processorRecPos;
@@ -125,23 +123,48 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
     
     
     mainFile->initFile(0, basepath);
-    mainInfo->start_time = getTimestamp(0);    
-    for (int i = 0; i < getNumRecordedChannels(); i++)
-	{
-        bitVolts.add(getChannel(getRealChannel(i))->bitVolts);
-        sampleRates.add(getChannel(getRealChannel(i))->sampleRate);
-        procMap.add(getChannel(getRealChannel(i))->nodeId);
+    if (hasAcquired)
+        mainInfo->start_time = (*timestamps)[getChannel(0)->sourceNodeId]; //(*timestamps).begin()->first;
+    else
+        mainInfo->start_time = 0;  
+ //    for (int i = 0; i < getNumRecordedChannels(); i++)
+	// {
+ //        bitVolts.add(getChannel(getRealChannel(i))->bitVolts);
+ //        sampleRates.add(getChannel(getRealChannel(i))->sampleRate);
+ //        procMap.add(getChannel(getRealChannel(i))->nodeId);
 
-		int procPos = processorRecPos[processorMap[getRealChannel(i)]];
+	// 	int procPos = processorRecPos[processorMap[getRealChannel(i)]];
 
-		recordedChanToKWDChan.add(procPos);
-		processorRecPos.set(processorMap[getRealChannel(i)], procPos+1);
-		channelTimestampArray.add(new Array<int64>);
-		channelTimestampArray.getLast()->ensureStorageAllocated(CHANNEL_TIMESTAMP_PREALLOC_SIZE);
-		channelLeftOverSamples.add(0);
-	}
+	// 	recordedChanToKWDChan.add(procPos);
+	// 	processorRecPos.set(processorMap[getRealChannel(i)], procPos+1);
+	// 	channelTimestampArray.add(new Array<int64>);
+	// 	channelTimestampArray.getLast()->ensureStorageAllocated(CHANNEL_TIMESTAMP_PREALLOC_SIZE);
+	// 	channelLeftOverSamples.add(0);
+	// }
+
+    for (int i = 0; i < processorMap.size(); i++)
+    {
+        int index = processorMap[i];
+        if (getChannel(i)->getRecordState())
+        {
+            recordedChanToKWDChan.add(channelsPerProcessor[index]);
+            // processorRecPos.set(i, channelsPerProcessor[index]);
+            channelsPerProcessor.set(index, channelsPerProcessor[index] + 1);
+            bitVolts.add(getChannel(i)->bitVolts);
+            sampleRates.add(getChannel(i)->sampleRate);
+
+            procMap.add(getChannel(i)->nodeId);
+            // int procPos = processorRecPos[processorMap[i]];
+            
+            // std::cout << "i " << i << " nodeid " << getChannel(i)->nodeId << " procPos " << procPos << " processorMap[i]" << processorMap[i] << std::endl;
+            
+            channelTimestampArray.add(new Array<int64>);
+            channelTimestampArray.getLast()->ensureStorageAllocated(CHANNEL_TIMESTAMP_PREALLOC_SIZE);
+            channelLeftOverSamples.add(0);
+        }
+    }
     
-    mainFile->open(getNumRecordedChannels());
+    mainFile->open(processorMap.size());
     
     mainInfo->name = String("Open Ephys Recording #") + String(recordingNumber);
     mainInfo->start_sample = 0;
@@ -159,9 +182,9 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
         mainFile->addChannelGroup(spikeInfoArray[i]);        
     }
     
-    mainFile->startNewRecording(recordingNumber,getNumRecordedChannels(), mainInfo, recordedChanToKWDChan, procMap);   
+    mainFile->startNewRecording(recordingNumber,processorMap.size(), mainInfo, recordedChanToKWDChan, procMap);   
     
-    for (int i=0; i<getNumRecordedChannels(); i++)
+    for (int i=0; i<processorMap.size(); i++)
     {        
         partBuffer.add(new Array<int16, CriticalSection, 3*SAVING_NUM>);
     }
@@ -186,57 +209,69 @@ void ArfRecording::closeFiles()
 	bufferSize = MAX_BUFFER_SIZE;
 }
 
-void ArfRecording::writeData(int writeChannel, int realChannel, const float* buffer, int size)
+void ArfRecording::writeData(AudioSampleBuffer& buffer)
 {        
-    if (size > bufferSize) //Shouldn't happen, and if it happens it'll be slow, but better this than crashing. Will be reset on flie close and reset.
-	{
-		std::cerr << "Write buffer overrun, resizing to" << size << std::endl;
-		bufferSize = size;
-		scaledBuffer.malloc(size);
-		intBuffer.malloc(size);
-	}
-	double multFactor = 1 / (float(0x7fff) * getChannel(realChannel)->bitVolts);
-	int index = processorMap[getChannel(realChannel)->recordIndex];
-	FloatVectorOperations::copyWithMultiply(scaledBuffer.getData(), buffer, multFactor, size);
-	AudioDataConverters::convertFloatToInt16LE(scaledBuffer.getData(), intBuffer.getData(), size);
-    
-    if (savingNum != 0) { //saving in parts; based on intermediate buffer
-        int16* buf = intBuffer.getData();
-        //simply appending to Array - best option?
-        for (int i=0; i<size; i++) {
-            partBuffer[writeChannel]->add(*(buf+i));
-        }
+ //    if (size > bufferSize) //Shouldn't happen, and if it happens it'll be slow, but better this than crashing. Will be reset on flie close and reset.
+	// {
+	// 	std::cerr << "Write buffer overrun, resizing to" << size << std::endl;
+	// 	bufferSize = size;
+	// 	scaledBuffer.malloc(size);
+	// 	intBuffer.malloc(size);
+	// }
+	
+    for (int i = 0; i < buffer.getNumChannels(); i++)
+    {
+        if (getChannel(i)->getRecordState())
+        {
 
-        const ScopedLock al(partBuffer.getLock());
-        bool ifSave = true;
-        for (int i=0; i<getNumRecordedChannels();i++)
-        {
-            if (partBuffer[i]->size() < savingNum)
-                ifSave = false;
+            int sourceNodeId = getChannel(i)->sourceNodeId;
+            int nSamples = (*numSamples)[sourceNodeId];
+
+            double multFactor = 1 / (float(0x7fff) * getChannel(i)->bitVolts);
+            int index = processorMap[getChannel(i)->recordIndex];
+            FloatVectorOperations::copyWithMultiply(scaledBuffer.getData(), buffer.getReadPointer(i,0), multFactor, nSamples);
+            AudioDataConverters::convertFloatToInt16LE(scaledBuffer.getData(), intBuffer.getData(), nSamples);
+            mainFile->writeChannel(intBuffer.getData(), nSamples, i);
         }
-        if (ifSave) 
-        {
-            if (partCnt >= cntPerPart) {
-                //This lock is also in writeEvent, writeSpike.
-                //Should prevent from trying to write one of those when we are opening the next part.
-                ScopedLock sl(partLock);
-                partNo++;
-                this->closeFiles();
-                this->openFiles(rootFolder, experimentNumber, recordingNumber);
-                partCnt = 0;
-            }
-            partCnt++;
+    }
+    
+    // if (savingNum != 0) { //saving in parts; based on intermediate buffer
+    //     int16* buf = intBuffer.getData();
+    //     //simply appending to Array - best option?
+    //     for (int i=0; i<size; i++) {
+    //         partBuffer[writeChannel]->add(*(buf+i));
+    //     }
+
+    //     const ScopedLock al(partBuffer.getLock());
+    //     bool ifSave = true;
+    //     for (int i=0; i<getNumRecordedChannels();i++)
+    //     {
+    //         if (partBuffer[i]->size() < savingNum)
+    //             ifSave = false;
+    //     }
+    //     if (ifSave) 
+    //     {
+    //         if (partCnt >= cntPerPart) {
+    //             //This lock is also in writeEvent, writeSpike.
+    //             //Should prevent from trying to write one of those when we are opening the next part.
+    //             ScopedLock sl(partLock);
+    //             partNo++;
+    //             this->closeFiles();
+    //             this->openFiles(rootFolder, experimentNumber, recordingNumber);
+    //             partCnt = 0;
+    //         }
+    //         partCnt++;
         
-            for (int i=0; i<getNumRecordedChannels();i++)
-            {
-                mainFile->writeChannel(partBuffer[i]->getRawDataPointer(), savingNum, i);
-                partBuffer[i]->removeRange(0, savingNum);            
-            }                    
-        }
-    }
-    else { //saving to one file
-        mainFile->writeChannel(intBuffer.getData(), size, writeChannel);
-    }
+    //         for (int i=0; i<getNumRecordedChannels();i++)
+    //         {
+    //             mainFile->writeChannel(partBuffer[i]->getRawDataPointer(), savingNum, i);
+    //             partBuffer[i]->removeRange(0, savingNum);            
+    //         }                    
+    //     }
+    // }
+    // else { //saving to one file
+    //     mainFile->writeChannel(intBuffer.getData(), size, writeChannel);
+    // }
 
 }
 
@@ -245,7 +280,7 @@ void ArfRecording::endChannelBlock(bool lastBlock)
 
 }
 
-void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 timestamp)
+void ArfRecording::writeEvent(int eventType, MidiMessage& event, int samplePosition)
 {
     //TODO makes no sense to lock before processing special message
     
@@ -255,7 +290,7 @@ void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 tim
     const uint8* dataptr = event.getRawData();
     if (eventType == GenericProcessor::TTL)
     {
-        mainFile->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),timestamp);
+        mainFile->writeEvent(0,*(dataptr+2),*(dataptr+1),(void*)(dataptr+3),(*timestamps)[*(dataptr+1)]+samplePosition);
     }
         
     else if (eventType == GenericProcessor::MESSAGE)
@@ -269,7 +304,7 @@ void ArfRecording::writeEvent(int eventType, const MidiMessage& event, int64 tim
         }
         else
         {
-            mainFile->writeEvent(1,*(dataptr+2),*(dataptr+1),(void*)(dataptr+6),timestamp);
+            mainFile->writeEvent(1,*(dataptr+2),*(dataptr+1),(void*)(dataptr+6),(*timestamps)[*(dataptr+1)]+samplePosition);
         }
     }
 }
@@ -292,16 +327,16 @@ void ArfRecording::processSpecialEvent(String msg)
     
 }
 
-void ArfRecording::addSpikeElectrode(int index, const SpikeRecordInfo* elec)
+void ArfRecording::addSpikeElectrode(int index, SpikeRecordInfo* elec)
 {
     spikeInfoArray.add(elec->numChannels);
 }
-void ArfRecording::writeSpike(int electrodeIndex, const SpikeObject& spike, int64 /*timestamp*/)
+void ArfRecording::writeSpike(const SpikeObject& spike, int electrodeIndex)
 {
     int64 timestamp = spike.timestamp;
-    // What if multiple parts? Maybe you need to subtract how much samples have passed
-    ScopedLock sl(partLock);
     float time = (float)timestamp / spike.samplingFrequencyHz;
+    // What if multiple parts? Maybe you need to subtract how much samples have passed
+    ScopedLock sl(partLock);    
     mainFile->writeSpike(electrodeIndex,spike.nSamples,spike.data,time);
 }
 
