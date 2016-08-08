@@ -106,14 +106,6 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
     }
     String basepath = rootFolder.getFullPathName() + rootFolder.separatorString + "experiment" + String(experimentNumber) + partName;
 
-
-    //Let's just put the first processor (usually the source node) on the KWIK for now
- //    infoArray[0]->name = String("Open Ephys Recording #") + String(recordingNumber);
-
-	// infoArray[0]->start_time = getTimestamp(0);
-
- //    infoArray[0]->start_sample = 0;
-
 	recordedChanToKWDChan.clear();
 	Array<int> processorRecPos;
 	processorRecPos.insertMultiple(0, 0, fileArray.size());
@@ -127,20 +119,6 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
         mainInfo->start_time = (*timestamps)[getChannel(0)->sourceNodeId]; //(*timestamps).begin()->first;
     else
         mainInfo->start_time = 0;  
- //    for (int i = 0; i < getNumRecordedChannels(); i++)
-	// {
- //        bitVolts.add(getChannel(getRealChannel(i))->bitVolts);
- //        sampleRates.add(getChannel(getRealChannel(i))->sampleRate);
- //        procMap.add(getChannel(getRealChannel(i))->nodeId);
-
-	// 	int procPos = processorRecPos[processorMap[getRealChannel(i)]];
-
-	// 	recordedChanToKWDChan.add(procPos);
-	// 	processorRecPos.set(processorMap[getRealChannel(i)], procPos+1);
-	// 	channelTimestampArray.add(new Array<int64>);
-	// 	channelTimestampArray.getLast()->ensureStorageAllocated(CHANNEL_TIMESTAMP_PREALLOC_SIZE);
-	// 	channelLeftOverSamples.add(0);
-	// }
 
     for (int i = 0; i < processorMap.size(); i++)
     {
@@ -210,15 +188,7 @@ void ArfRecording::closeFiles()
 }
 
 void ArfRecording::writeData(AudioSampleBuffer& buffer)
-{        
- //    if (size > bufferSize) //Shouldn't happen, and if it happens it'll be slow, but better this than crashing. Will be reset on flie close and reset.
-	// {
-	// 	std::cerr << "Write buffer overrun, resizing to" << size << std::endl;
-	// 	bufferSize = size;
-	// 	scaledBuffer.malloc(size);
-	// 	intBuffer.malloc(size);
-	// }
-	
+{        	
     for (int i = 0; i < buffer.getNumChannels(); i++)
     {
         if (getChannel(i)->getRecordState())
@@ -234,45 +204,6 @@ void ArfRecording::writeData(AudioSampleBuffer& buffer)
             mainFile->writeChannel(intBuffer.getData(), nSamples, i);
         }
     }
-    
-    // if (savingNum != 0) { //saving in parts; based on intermediate buffer
-    //     int16* buf = intBuffer.getData();
-    //     //simply appending to Array - best option?
-    //     for (int i=0; i<size; i++) {
-    //         partBuffer[writeChannel]->add(*(buf+i));
-    //     }
-
-    //     const ScopedLock al(partBuffer.getLock());
-    //     bool ifSave = true;
-    //     for (int i=0; i<getNumRecordedChannels();i++)
-    //     {
-    //         if (partBuffer[i]->size() < savingNum)
-    //             ifSave = false;
-    //     }
-    //     if (ifSave) 
-    //     {
-    //         if (partCnt >= cntPerPart) {
-    //             //This lock is also in writeEvent, writeSpike.
-    //             //Should prevent from trying to write one of those when we are opening the next part.
-    //             ScopedLock sl(partLock);
-    //             partNo++;
-    //             this->closeFiles();
-    //             this->openFiles(rootFolder, experimentNumber, recordingNumber);
-    //             partCnt = 0;
-    //         }
-    //         partCnt++;
-        
-    //         for (int i=0; i<getNumRecordedChannels();i++)
-    //         {
-    //             mainFile->writeChannel(partBuffer[i]->getRawDataPointer(), savingNum, i);
-    //             partBuffer[i]->removeRange(0, savingNum);            
-    //         }                    
-    //     }
-    // }
-    // else { //saving to one file
-    //     mainFile->writeChannel(intBuffer.getData(), size, writeChannel);
-    // }
-
 }
 
 void ArfRecording::endChannelBlock(bool lastBlock)
@@ -282,7 +213,6 @@ void ArfRecording::endChannelBlock(bool lastBlock)
 
 void ArfRecording::writeEvent(int eventType, MidiMessage& event, int samplePosition)
 {
-    //TODO makes no sense to lock before processing special message
     
     //Currently timestamp is general, not relative to the current part.
     //Maybe you need to subtract how much samples have passed
