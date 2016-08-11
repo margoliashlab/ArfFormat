@@ -29,13 +29,19 @@
 #define CHANNEL_TIMESTAMP_MIN_WRITE	32
 #define TIMESTAMP_EACH_NSAMPLES 1024
 
+
+#define CNT_PER_PART 1000
+// how many savingNum samples need to pass until we open a new file
+// savingNum is currently 20000 and you probably shouldn't change it
+// if set to 0, then no parts
+
 ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), hasAcquired(false)
 {
     //timestamp = 0;
     scaledBuffer.malloc(MAX_BUFFER_SIZE);
     intBuffer.malloc(MAX_BUFFER_SIZE);
     savingNum = SAVING_NUM; //declared as a const in ArfRecording.h
-    cntPerPart = 10000;
+    cntPerPart = CNT_PER_PART;
     partNo = 0;
     partCnt = 0;
 }
@@ -102,7 +108,7 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
     this->experimentNumber = experimentNumber;
     this->recordingNumber = recordingNumber;
     String partName = "";
-    if (savingNum != 0) {
+    if (cntPerPart > 0) {
         partName = "_prt"+String(partNo);
         std::cout << "Opening part" << partNo << std::endl;
     }
@@ -200,7 +206,7 @@ void ArfRecording::writeData(int writeChannel, int realChannel, const float* buf
 	FloatVectorOperations::copyWithMultiply(scaledBuffer.getData(), buffer, multFactor, size);
 	AudioDataConverters::convertFloatToInt16LE(scaledBuffer.getData(), intBuffer.getData(), size);
     
-    if (savingNum != 0) { //saving in parts; based on intermediate buffer
+    if (cntPerPart > 0) { //saving in parts; based on intermediate buffer
         int16* buf = intBuffer.getData();
         //simply appending to Array - best option?
         for (int i=0; i<size; i++) {
