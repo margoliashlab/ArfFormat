@@ -27,7 +27,9 @@
 #define MAX_BUFFER_SIZE 40960
 #define CHANNEL_TIMESTAMP_PREALLOC_SIZE 128
 #define CHANNEL_TIMESTAMP_MIN_WRITE	32
-#define TIMESTAMP_EACH_NSAMPLES 1024
+
+// no parts in this version
+#define TIMESTAMP_EACH_NSAMPLES 0
 
 ArfRecording::ArfRecording() : processorIndex(-1), bufferSize(MAX_BUFFER_SIZE), hasAcquired(false)
 {
