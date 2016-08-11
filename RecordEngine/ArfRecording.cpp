@@ -102,10 +102,6 @@ void ArfRecording::openFiles(File rootFolder, int experimentNumber, int recordin
     this->experimentNumber = experimentNumber;
     this->recordingNumber = recordingNumber;
     String partName = "";
-    if (savingNum != 0) {
-        partName = "_prt"+String(partNo);
-        std::cout << "Opening part" << partNo << std::endl;
-    }
     String basepath = rootFolder.getFullPathName() + rootFolder.separatorString + "experiment" + String(experimentNumber) + partName;
 
 	recordedChanToKWDChan.clear();
