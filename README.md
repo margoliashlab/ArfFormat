@@ -9,6 +9,17 @@ This guide is written primarily for Ubuntu 16.04, but should work on other versi
 
 First we want to get the source code for both Open-Ephys and the plugin. Getting the GUI code from margoliashlab Github account is to guarantee that the version will work well with the plugin.
 
+However, if you're using an older computer (for example you have only two cores), then you want to use the older version of the GUI, 0.4.0, which works better in that setting. Then also get the plugin made for that version, so do:
+
+```
+git clone https://github.com/margoliashlab/plugin-GUI.git
+cd plugin-GUI/Sources/Plugins
+git clone https://github.com/margoliashlab/ArfFormat.git -b 0.4.0
+cd ../../..
+```
+
+Otherwise, you just need to do:
+
 ```
 git clone https://github.com/margoliashlab/plugin-GUI.git
 cd plugin-GUI/Sources/Plugins
@@ -63,4 +74,4 @@ A few things that might be surprising:
 
 - There is a parameter `MAX_TRANSFORM_SIZE` that limits the length of an array that represents the waveform of a spike. However, it seems that usually not the entire array is filled with data. But because variable-length datatypes inside Compound Datatypes seem problematic, I allocate and write the entire array, filling the rest with 0s. Thus the attribute valid_samples represents how many rows are actually meaningful.
 
-- Data can be saved in parts. First, to an intermediate buffer partBuf which is an array of JUCE Arrays (so that it's easy to remove first X elements when we write them to a file) for each channel, though this might be theoretically inefficient. In case it's necessary, it shouldn't be hard to change that to a JUCE HeapBlock or something. Then, when all Arrays of all channels have the required number of samples (variable `savingNum`), we save them to the file. Also, every `cntPerPart` times we do that, we create an entirely new file with increased `partNo`. (That's in `ArfRecording::writeData`.) I also created two locks, but it's not clear to me if they are necessary. The `partBuffer` Array is locked everytime we remove from it and save to a file, so that other channels can't add their data in the middle of that. There is also a general lock `partLock`, which is locked everytime new part is being opened, but also when we try to write events or spikes. This is to prevent writing events to a file that's currently closed. For now, saving in parts is disabled. To enable it, make `SAVING_NUM` in ArfRecording.h greater than 0, perhaps 20000 (to write to file every 0.5s), and set cntPerPart to decide how often you want new parts created. Ideally there will be a GUI for it at some point.
+- Data can be saved in parts. First, to an intermediate buffer partBuf which is an array of JUCE Arrays (so that it's easy to remove first X elements when we write them to a file) for each channel, though this might be theoretically inefficient. In case it's necessary, it shouldn't be hard to change that to a JUCE HeapBlock or something. Then, when all Arrays of all channels have the required number of samples (variable `savingNum`), we save them to the file. Also, every `cntPerPart` times we do that, we create an entirely new file with increased `partNo`. (That's in `ArfRecording::writeData`.) I also created two locks, but it's not clear to me if they are necessary. The `partBuffer` Array is locked everytime we remove from it and save to a file, so that other channels can't add their data in the middle of that. There is also a general lock `partLock`, which is locked everytime new part is being opened, but also when we try to write events or spikes. This is to prevent writing events to a file that's currently closed. You can modify how often you want to save by changing the constant `CNT_PER_PART` in `Sources/Plugins/ArfFormat/RecordControl/ArfRecording.cpp`. `SAVING_NUM` is set to 20000, and it probably shouldn't be changed, so for example if `CNT_PER_PART = 1000`, then you will save every 500 seconds on 40 kHz data.
