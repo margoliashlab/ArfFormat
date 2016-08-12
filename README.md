@@ -14,9 +14,7 @@ However, if you're using an older computer (for example you have only two cores)
 ```
 git clone https://github.com/margoliashlab/plugin-GUI.git
 cd plugin-GUI/Sources/Plugins
-git clone https://github.com/margoliashlab/ArfFormat.git
-cd ArfFormat
-git checkout 0.4.0
+git clone https://github.com/margoliashlab/ArfFormat.git -b 0.4.0
 cd ../../..
 ```
 
